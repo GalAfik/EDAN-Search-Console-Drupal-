@@ -1,0 +1,662 @@
+<?php
+
+
+function search_console_permission() {
+	return array(
+		'administer search console settings' => array(
+			'title' => t('Administer EDAN Search Console Settings'),
+			'description' => t('Edit EDAN Search Console Settings.'),
+			),
+		'use search console' => array(
+			'title' => t('Use EDAN Search Console'),
+			'description' => t('Use EDAN Search Console.'),
+			),
+		);
+}
+
+function search_console_admin() {
+
+	$config = require('config.php');
+
+	$form['search_console_host'] = array(
+		'#type' => 'textfield',
+		'#title' => t('Host'),
+		'#default_value' => variable_get('search_console_host', $config->host),
+		);
+
+	$form['search_console_auth_key'] = array(
+		'#type' => 'textfield',
+		'#title' => t('Authorization Key'),
+		'#default_value' => variable_get('search_console_auth_key', $config->auth_key),
+		);
+
+	$form['search_console_app_id'] = array(
+		'#type' => 'textfield',
+		'#title' => t('Application ID'),
+		'#default_value' => variable_get('search_console_app_id', $config->app_id),
+		);
+
+	return system_settings_form($form);
+}
+
+function search_console_menu() {
+
+	$items['search_console'] = array(
+		'title' => 'Search Console',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('search_console_form'),
+		'access arguments' => array('use search console'),
+		);
+
+	$items['search_console/full_json'] = array(
+		'page callback' => '_full_json_page_callback',
+		'page arguments' => array(),
+		'access arguments' => array('use search console'),
+		);
+
+	$items['search_console_settings'] = array(
+		'title' => t('Search Console Settings'),
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('search_console_admin'),
+		'access arguments' => array('administer search console settings'),
+		'type' => MENU_CALLBACK,
+		);
+
+	return $items;
+}
+
+function _full_json_page_callback() {
+	$path_parts = arg();
+	$query = $path_parts[2];
+	$json = _get_search_results_from_edan($query);
+
+	dumper($json);
+}
+
+function _get_search_results_from_edan($query = '') {
+
+	$config = require('config.php');
+	$host = variable_get('search_console_host', $config->host);
+	$authKey = variable_get('search_console_auth_key', $config->auth_key);
+	$appId = variable_get('search_console_app_id', $config->app_id);
+	// return $resp;
+	date_default_timezone_set('UTC');
+	// Specify your appid and key below
+	$config = array(
+		'edan_server' => $host,
+		'edan_app_id' => $appId,
+		'edan_auth_key' => $authKey,
+		'edan_tier_type' => 1,
+		);
+	// Example usage
+	$edan = new EDANInterface($config['edan_server'], $config['edan_app_id'], $config['edan_auth_key'], $config['edan_tier_type']);
+	// Request
+	$service = 'metadata/v1.1/metadata/search.htm'; // API Endpoint
+	// Response
+	$results_raw = $edan->sendRequest($query, $service, FALSE, $info = '');
+	return $results_raw;
+}
+
+function search_console_form($form, &$form_state){
+
+	drupal_add_js(
+		drupal_get_path('module', 'search_console') . '/includes/clipboard.min.js',
+		array('scope' => 'footer', 'weight' => 51)
+		);
+	//hide parts of description box
+	$js = 'jQuery().ready(function(){
+		jQuery(".filter-wrapper").hide();
+		new Clipboard(".btn");
+	});';
+	drupal_add_js($js, 'inline');
+
+	if(user_access('administer search console settings')){
+		// hyperlink to the admin page for changing authentication settings
+		$form['link_to_settings'] = array(
+			'#type' => 'item',
+			'#markup' => 'Settings may be changed through the ' . l('settings page', '/search_console_settings') . '.',
+			);
+	}
+
+	$form['group_tabs'] = array(
+		'#type'     => 'horizontal_tabs',
+		'#attached' => array('library' => array(array('field_group', 'horizontal-tabs'))),
+		);
+
+  // Search Field Filters Tab
+	$form['search_field_filters_tab'] = array(
+		'#type'  => 'fieldset',
+		'#title' => t('Filters'),
+		'#group' => 'group_tabs',
+		);
+
+	$form['search_field_filters_tab']['q'] = array(
+		'#title' => t('q'),
+		'#type' => 'textfield',
+		'#description' => 'The q parameter is normally the main query for the request. See Solr query syntax for more information on different types of queries and syntaxes.',
+		'#group' => 'search_field_filters_tab',
+		);
+	$form['search_field_filters_tab']['fqs'] = array(
+		'#title' => t('fqs'),
+		'#type' => 'textfield',
+		'#description' => 'Applies a filter query to the search results. "fq" stands for Filter Query. This parameter can be used to specify a query that can be used to restrict the super set of documents that can be returned, without influencing score. It can be very useful for speeding up complex queries since the queries specified with fq are cached independently from the main query.',
+		'#states' => array(
+			'invisible' => array(
+				':input[name="record_type"]' => array('value' => ''),
+				),
+			),
+		'#group' => 'search_field_filters_tab',
+		);
+	$form['search_field_filters_tab']['rows'] = array(
+		'#title' => t('rows ( 100 max )'),
+		'#type' => 'textfield',
+		'#default_value' => 10,
+		'#description' => 'This parameter is used to paginate results from a query. It specify the maximum number of documents from the complete result set to return to the client for every request. You can consider it as the maximum number of result appear in the page. (default_value value:10)',
+		'#group' => 'search_field_filters_tab',
+		);
+	$form['search_field_filters_tab']['start'] = array(
+		'#title' => t('start ( Do not exceed the maximum number of records! )'),
+		'#type' => 'textfield',
+		'#default_value' => 1,
+		'#description' => 'This parameter is used to paginate results from a query. When specified, it indicates the offset (by default, 0) in the complete result set for the queries where the set of returned documents should begin.',
+		'#group' => 'search_field_filters_tab',
+		);
+
+	$form['search_field_filters_tab']['record_type'] = array(
+		'#type' => 'select',
+		'#title' => t('Record Type'),
+		'#description' => 'This selection will limit the results to only show records of the selected type. <span style="color:red;">More options are being added.</span>',
+		'#options' => array(
+			// '' => t('Any'),
+			'edanmdm' => t('edanmdm'),
+			// 'ogmt' => t('ogmt'),
+			),
+		'#group' => 'search_field_filters_tab',
+		);
+	$form['search_field_filters_tab']['facets'] = array(
+		'#type' => 'fieldset',
+		'#title' => 'Facets',
+		'#states' => array(
+			'visible' => array(
+				':input[name="record_type"]' => array('value' => 'edanmdm'),
+				),
+			),
+		'#group' => 'search_field_filters_tab',
+		);
+
+	$form['search_field_filters_tab']['facets']['edanmdm_online_media_type'] = array(
+		'#title' => t('online_media_type'),
+		'#type' => 'textfield',
+		'#group' => 'search_field_filters_tab',
+		);
+	$form['search_field_filters_tab']['facets']['edanmdm_object_type'] = array(
+		'#title' => t('object_type'),
+		'#type' => 'textfield',
+		'#group' => 'search_field_filters_tab',
+		);
+	$form['search_field_filters_tab']['facets']['edanmdm_topic'] = array(
+		'#title' => t('topic'),
+		'#type' => 'textfield',
+		'#group' => 'search_field_filters_tab',
+		);
+	$form['search_field_filters_tab']['facets']['edanmdm_name'] = array(
+		'#title' => t('name'),
+		'#type' => 'textfield',
+		'#group' => 'search_field_filters_tab',
+		);
+	$form['search_field_filters_tab']['facets']['edanmdm_culture'] = array(
+		'#title' => t('culture'),
+		'#type' => 'textfield',
+		'#group' => 'search_field_filters_tab',
+		);
+	$form['search_field_filters_tab']['facets']['edanmdm_language'] = array(
+		'#title' => t('language'),
+		'#type' => 'textfield',
+		'#group' => 'search_field_filters_tab',
+		);
+	$form['search_field_filters_tab']['facets']['edanmdm_place'] = array(
+		'#title' => t('place'),
+		'#type' => 'textfield',
+		'#group' => 'search_field_filters_tab',
+		);
+	$form['search_field_filters_tab']['facets']['edanmdm_date'] = array(
+		'#title' => t('date'),
+		'#type' => 'textfield',
+		'#group' => 'search_field_filters_tab',
+		);
+	$form['search_field_filters_tab']['facets']['edanmdm_data_source'] = array(
+		'#title' => t('data_source'),
+		'#type' => 'textfield',
+		'#group' => 'search_field_filters_tab',
+		);
+	$form['search_field_filters_tab']['facets']['edanmdm_tax_kingdom'] = array(
+		'#title' => t('tax_kingdom'),
+		'#type' => 'textfield',
+		'#group' => 'search_field_filters_tab',
+		);
+	$form['search_field_filters_tab']['facets']['edanmdm_tax_phylum'] = array(
+		'#title' => t('tax_phylum'),
+		'#type' => 'textfield',
+		'#group' => 'search_field_filters_tab',
+		);
+	$form['search_field_filters_tab']['facets']['edanmdm_tax_class'] = array(
+		'#title' => t('tax_class'),
+		'#type' => 'textfield',
+		'#group' => 'search_field_filters_tab',
+		);
+	$form['search_field_filters_tab']['facets']['edanmdm_tax_order'] = array(
+		'#title' => t('tax_order'),
+		'#type' => 'textfield',
+		'#group' => 'search_field_filters_tab',
+		);
+	$form['search_field_filters_tab']['facets']['edanmdm_tax_family'] = array(
+		'#title' => t('tax_family'),
+		'#type' => 'textfield',
+		'#group' => 'search_field_filters_tab',
+		);
+	$form['search_field_filters_tab']['facets']['edanmdm_scientific_name'] = array(
+		'#title' => t('scientific name'),
+		'#type' => 'textfield',
+		'#group' => 'search_field_filters_tab',
+		);
+	// submit button
+	$form['search_field_filters_tab']['submit'] = array(
+		'#value' => 'Submit',
+		'#type' => 'submit',
+		'#name' => 'search_field_filters_submit',
+		'#prefix' => '<br>',
+		'#group' => 'search_field_filters_tab',
+		);
+
+
+
+	$form['collections_url_tab'] = array(
+		'#type'  => 'fieldset',
+		'#title' => t('URL'),
+		'#group' => 'group_tabs',
+		);
+	$form['collections_url_tab']['collections_url'] = array(
+		'#title' => t('Collections URL'),
+		'#type' => 'textfield',
+		'#description' => 'Paste a <b><a href="http://collections.si.edu" target="_blank">collection.si.edu</a></b> URL into the field above to replicate the search on this page. You may modify the search using the Search Filters above or by adding requirements to the Raw Query below.',
+		'#group' => 'collections_url_tab',
+		'#maxlength' => 100000,
+		);
+	// submit button
+	$form['collections_url_tab']['submit'] = array(
+		'#value' => 'Submit',
+		'#type' => 'submit',
+		'#name' => 'collections_url_submit',
+		'#prefix' => '<br>',
+		'#group' => 'collections_url_tab',
+		);
+
+
+
+	$form['query_tab'] = array(
+		'#type'  => 'fieldset',
+		'#title' => t('Query'),
+		'#group' => 'group_tabs',
+		);
+	$form['query_tab']['query'] = array(
+		'#title' => t('Raw Decoded Query'),
+		'#type' => 'text_format',
+		'#description' => 'You may enter your search filters as a raw query into this field in order to narrow down your search results.',
+		'#group' => 'query_tab',
+		);
+	$form['query_tab']['encoded_query'] = array(
+		'#title' => t('Encoded Query'),
+		'#type' => 'text_format',
+		'#description' => 'This is a URL-safe encoded query to use in your application.',
+		'#group' => 'query_tab',
+		);
+	// submit button
+	$form['query_tab']['submit'] = array(
+		'#value' => 'Submit',
+		'#type' => 'submit',
+		'#name' => 'query_submit',
+		'#prefix' => '<br>',
+		'#group' => 'query_tab',
+		);
+
+
+	// $form['rows_reference'] = array(
+	// 	'#type' => 'item',
+	// 	'#markup' => isset($form_state['rows_reference']) ? '<b>Number of Rows Returned:</b><pre>' . $form_state['rows_reference'] . '</pre>' : '',
+	// 	);
+	$form['query_reference'] = array(
+		'#type' => 'item',
+		'#markup' => isset($form_state['query_reference']) ? '<b>Last Valid Query:</b><pre>' . urldecode($form_state['query_reference']) . '</pre>' : '',
+		);
+
+	// results display area
+	$form['group_search_results_tabs'] = array(
+		'#type'     => 'horizontal_tabs',
+		'#attached' => array('library' => array(array('field_group', 'horizontal-tabs'))),
+		);
+
+	if(isset($form_state['structured_search_results'])){
+		$form['structured_search_results_tab'] = array(
+			'#type'  => 'fieldset',
+			'#title' => t('Structured Results'),
+			'#group' => 'group_search_results_tabs',
+			);
+		
+		if(!empty($form_state['structured_search_results'])){
+			foreach ($form_state['structured_search_results'] as $key => $record) {
+				// get fields printed out nicely for the structured search resutls
+				$fields = '';
+				foreach ($record as $field_key => $field_value) {
+					if($field_key != 'content') $fields .= '<strong>' . $field_key . ':</strong> ' . $field_value . "\n";
+				}
+				$form['structured_search_results_tab']['structured_search_results'][$key] = array(
+					'#type' => 'item',
+					'#markup' => '<pre>' . $fields . '</pre>',
+					'#group' => 'structured_search_results_tab',
+					);
+			}	
+		}else{
+			$form['structured_search_results_tab']['structured_search_results'] = array(
+					'#type' => 'item',
+					'#markup' => '<pre>The Query returned no results.</pre>',
+					'#group' => 'structured_search_results_tab',
+					);
+		}
+	}
+
+	if(isset($form_state['raw_json_results'])){
+
+		$form['raw_json_results_tab'] = array(
+			'#type'  => 'fieldset',
+			'#title' => t('Raw JSON Results'),
+			'#group' => 'group_search_results_tabs',
+			);
+
+
+		if(!empty($form_state['raw_json_results'])) {
+			if(substr_count( $form_state['raw_json_results'], "\n" ) <= 1000){
+
+				$form['raw_json_results_tab']['raw_json_results'] = array(
+					'#type' => 'item',
+					'#markup' => '<button type="button" class="btn" data-clipboard-action="copy" data-clipboard-target="#holdtext">Copy to clipboard</button><pre id="holdtext">' . $form_state['raw_json_results'] . '</pre>',
+					'#group' => 'raw_json_results_tab',
+					);
+			}else {
+
+				$lines = explode("\n", $form_state['raw_json_results']);
+				$output = implode("\n", array_slice($lines, 0, 1000));
+				$form['raw_json_results_tab']['raw_json_results'] = array(
+					'#type' => 'item',
+					'#markup' => '<pre>' . $output . "</pre><a href='/search_console/full_json/" . $form_state['query_reference'] . "' target='_blank'>Click to view full JSON</h>",
+					'#group' => 'raw_json_results_tab',
+					);
+			}
+		}
+	}
+	if(!empty($form_state['structured_search_results']) || !empty($form_state['raw_json_results'])){
+		$form['link_to_top'] = array(
+			'#type' => 'item',
+			'#markup' => '<a href="#">Back to top of page</a>',
+			);
+	}
+
+	return $form;
+}
+
+function search_console_form_submit($form, &$form_state) {
+
+	$query = '';
+
+	switch($form_state['triggering_element']['#name']){
+		case 'search_field_filters_submit':
+			// initialize query and set rows if rows field is set
+		if(!empty($form_state['values']['rows'])){
+			$query .= '&rows=' . $form_state['values']['rows'];
+			if($form_state['values']['rows'] > 100){
+				drupal_set_message('You exceeded the maximum number of rows. Your Query defaulted to 10 rows.', 'error');
+			}
+		}
+		$query .= !empty($form_state['values']['start']) ? '&start=' . $form_state['values']['start'] : '';
+		$query .= !empty($form_state['values']['q']) ? '&q="' . $form_state['values']['q'] . '"' : '';
+		$query .= !empty($form_state['values']['fqs']) ? '&fqs=' . $form_state['values']['fqs'] : '';
+
+		if(isset($form_state['values']['record_type']) && !empty($form_state['values']['record_type'])){
+				// look for only records of type record_type
+			$query .= '&fqs=["type:' . $form_state['values']['record_type'] . '"';
+
+				// add facets to search for
+			$record_type = $form_state['values']['record_type'];
+			foreach ($form_state['values'] as $key => $value) {
+				if(substr($key, 0, strlen($record_type)) == $record_type && !empty($value)){
+					$query .= ',"' . str_replace($record_type . '_', '', $key) . ':' . $value . '"';
+				}
+			}
+
+			// close fqs
+			$query .= ']';
+		}
+
+		// set query textfields
+		$form_state['input']['query']['value'] = $query;
+		$form_state['input']['encoded_query']['value'] = urlencode($query);
+		break;
+
+		case 'collections_url_submit':
+			// get the query from a collections.si.edu url
+		if(!empty($form_state['values']['collections_url'])){
+				// set query
+			$temp_query = end(explode('http://collections.si.edu/search/results.htm?', urldecode($form_state['values']['collections_url'])));
+			$temp_query_parameters = explode('&', $temp_query);
+			$query_parameters = array();
+			$query_parameters['fqs'] = '';
+			// set the key to the parameter name and the value to just the value
+			foreach ($temp_query_parameters as $value) {
+				if(reset(explode('=', $value)) == 'fq'){
+					$fqs = '';
+					if(!empty($query_parameters['fqs'])){
+						$fqs .= ',';
+					}
+					$fqs .= '"' . end(explode('=', str_replace('"', '', $value))) . '"';
+					$query_parameters['fqs'] .= $fqs;
+				}else{
+					$query_parameters[reset(explode('=', $value))] = end(explode('=', $value));
+				}
+			}
+			$query_parameters['fqs'] = urlencode('[' . $query_parameters['fqs'] . ']');
+			// set facets and fields on filters page according to url query
+			// distribute values across facets and fields
+			foreach ($query_parameters as $key => $value) {
+				if (array_key_exists($key, $form_state['input'])){
+					$form_state['input'][$key] = $value;
+				}
+				// check for facet fields
+				if (array_key_exists('edanmdm_' . $key, $form_state['input'])){
+					$form_state['input']['edanmdm_' . $key] = $value;
+				}
+			}
+
+			$query = '';
+			foreach ($query_parameters as $key => $value) {
+				if(!empty($query)){
+					$query .= '&';
+				}
+				$query .= $key . '=' . $value;
+			}
+			
+			// set query textfields
+			$form_state['input']['query']['value'] = $query;
+			$form_state['input']['encoded_query']['value'] = urlencode($query);
+		}
+		break;
+
+		case 'query_submit':
+			// set the query
+		if(!empty($form_state['values']['query']['value'])){
+				// set query
+			$query = $form_state['values']['query']['value'];
+				// set field default values
+			$form_state['input']['encoded_query']['value'] = urlencode($form_state['values']['query']['value']);
+		}else if(!empty($form_state['values']['encoded_query']['value'])){
+				// set query
+			$query = urldecode($form_state['values']['encoded_query']['value']);
+				// set field default values
+			$form_state['input']['query']['value'] = urldecode($form_state['values']['encoded_query']['value']);
+		}
+		break;
+	}
+
+	if(!empty($query)){
+		$form_state['query_reference'] = $query;
+
+		// set the raw json results
+		$raw_json_results = _get_search_results_from_edan(isset($query) ? $query : '');
+		$form_state['raw_json_results'] = $raw_json_results;
+
+		// set the structured search results
+		$raw_json = json_decode($raw_json_results, true);
+		$form_state['rows_reference'] = $raw_json['numFound'];
+		// reset the results
+		$form_state['structured_search_results'] = array();
+		// add rows to results
+		if(isset($raw_json['rows'])){
+			foreach ($raw_json['rows'] as $key => $record) {
+				$form_state['structured_search_results'][] = $record;
+			}
+		}else{
+			drupal_set_message('Something went wrong. Please contact an Administrator.', 'error');
+		}
+	}else{
+		drupal_set_message('The search parameters are invalid. Please adjust your search and try again or contact an Administrator.', 'error');
+	}
+
+	// rebuild the form with new inputs and results set
+	$form_state['rebuild'] = TRUE;
+}
+
+
+
+
+
+
+
+
+
+
+// Class
+class EDANInterface {
+  // this class actually generates the call to the API
+	private $server;
+	private $app_id;
+	private $edan_key;
+  /**
+   * int
+   * 0 for unsigned/trusted/T1 requests;
+   * 1 for signed/T2 requests;
+   * 2 for password based (unused)
+   */
+  private $auth_type = 1;
+  /**
+   * Bool tracks whether the request was successful based on response header (200 = success)
+   */
+  private $valid_request = FALSE;
+  public $result_format = 'json';
+  private $results;
+  /**
+   * Constructor
+   */
+  public function __construct($server, $app_id, $edan_key, $auth_type = 1) {
+  	$this->server = $server;
+  	$this->app_id = $app_id;
+  	$this->edan_key = $edan_key;
+    // Normalize, but don't cast
+  	if ($auth_type == 0 || $auth_type == '0') {
+  		$this->auth_type = 0;
+  	}
+  	$this->result_format = 'json';
+  	$this->valid_request = FALSE;
+  }
+  /**
+   * Creates the header for the request to EDAN. Takes $uri, prepends a nonce, and appends
+   * the date and appID key. Hashes as sha1() and base64_encode() the result.
+   * @param uri The URI (string) to be hashed and encoded.
+   * @returns Array containing all the elements and signed header value
+   */
+  private function encodeHeader($uri) {
+    $ipnonce = $this->get_nonce(); // Alternatively you could do: get_nonce(8, '-'.get_nonce(8));
+    $date = date('Y-m-d H:i:s');
+    $return = array(
+    	'X-AppId: ' . $this->app_id,
+    	'X-RequestDate: ' . $date,
+    	'X-AppVersion: ' . 'EDANInterface-1.01'
+    	);
+    // For signed/T2 requests
+    if ($this->auth_type === 1) {
+    	$auth = "{$ipnonce}\n{$uri}\n{$date}\n{$this->edan_key}";
+    	$content = base64_encode(sha1($auth));
+    	$return[] = 'X-Nonce: ' . $ipnonce;
+    	$return[] = 'X-AuthContent: ' . $content;
+    }
+    return $return;
+}
+  /**
+   * Perform a curl request
+   * @param args An associative array that can contain {q,fq,rows,start}
+   * @param service The service name you are curling {metadataService,tagService,collectService}
+   * @param POST boolean, defaults to false; on true $uri sent CURLOPT_POSTFIELDS
+   * @param info reference, if passed will be set with the output of curl_getinfo
+   *
+   * @return string
+   * JSON or XML response from EDAN as a string.
+   */
+  public function sendRequest($uri, $service, $POST = FALSE, &$info) {
+    // Hash the request for tracking/profiling/caching
+  	$hash = md5($uri . $service . $POST);
+  	$ch = curl_init();
+  	if ($POST === TRUE) {
+  		curl_setopt($ch, CURLOPT_URL, $this->server . $service);
+  		curl_setopt($ch, CURLOPT_POST, 1);
+  		curl_setopt($ch, CURLOPT_POSTFIELDS, "encodedRequest=" . base64_encode($uri));
+  	} else {
+  		curl_setopt($ch, CURLOPT_URL, $this->server . $service . '?' . $uri);
+  	}
+  	curl_setopt($ch, CURLOPT_HEADER, 0);
+  	curl_setopt($ch, CURLOPT_HTTPHEADER, $this->encodeHeader($uri));
+  	curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+  	curl_setopt($ch, CURLINFO_HEADER_OUT, 1);
+  	$response = curl_exec($ch);
+  	$info = curl_getinfo($ch);
+  	if ($info['http_code'] == 200) {
+  		$this->valid_request = TRUE;
+  	} else {
+  		$this->valid_request = FALSE;
+  	}
+  	curl_close($ch);
+  	$GLOBALS['edan_hashes'][$hash] = $response;
+  	return $response;
+  }
+  /**
+   * Generates a nonce.
+   *
+   * @param int $length
+   *   (optional) Int representing the length of the random string.
+   * @param string $prefix
+   *   (optional) String containing a prefix to be prepended to the random string.
+   *
+   * @return string
+   *   Returns a string containing a randomized set of letters and numbers $length long
+   *   with $prefix prepended.
+   */
+  private function get_nonce($length = 15, $prefix = '') {
+  	$password = "";
+  	$possible = "0123456789abcdefghijklmnopqrstuvwxyz";
+  	$i = 0;
+  	while ($i < $length) {
+  		$char = substr($possible, mt_rand(0, strlen($possible)-1), 1);
+  		if (!strstr($password, $char)) {
+  			$password .= $char;
+  			$i++;
+  		}
+  	}
+  	return $prefix.$password;
+  }
+}
