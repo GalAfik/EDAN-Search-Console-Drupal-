@@ -326,7 +326,7 @@ function search_console_form($form, &$form_state){
 	// 	);
 	$form['query_reference'] = array(
 		'#type' => 'item',
-		'#markup' => isset($form_state['query_reference']) ? '<b>Last Valid Query:</b><pre>' . urldecode($form_state['query_reference']) . '</pre>' : '',
+		'#markup' => isset($form_state['query_reference']) ? '<b>Last Valid Query:</b><pre>' . str_replace(' ', '+', urldecode($form_state['query_reference'])) . '</pre>' : '',
 		);
 
 	// results display area
@@ -341,7 +341,7 @@ function search_console_form($form, &$form_state){
 			'#title' => t('Structured Results'),
 			'#group' => 'group_search_results_tabs',
 			);
-		
+
 		if(!empty($form_state['structured_search_results'])){
 			foreach ($form_state['structured_search_results'] as $key => $record) {
 				// get fields printed out nicely for the structured search resutls
@@ -354,7 +354,7 @@ function search_console_form($form, &$form_state){
 					'#markup' => '<pre>' . $fields . '</pre>',
 					'#group' => 'structured_search_results_tab',
 					);
-			}	
+			}
 		}else{
 			$form['structured_search_results_tab']['structured_search_results'] = array(
 					'#type' => 'item',
@@ -417,7 +417,7 @@ function search_console_form_submit($form, &$form_state) {
 			}
 		}
 		$query .= !empty($form_state['values']['start']) ? '&start=' . $form_state['values']['start'] : '';
-		$query .= !empty($form_state['values']['q']) ? '&q="' . $form_state['values']['q'] . '"' : '';
+		$query .= !empty($form_state['values']['q']) ? '&q="' . str_replace(' ', '+', $form_state['values']['q']) . '"' : '';
 		$query .= !empty($form_state['values']['fqs']) ? '&fqs=' . $form_state['values']['fqs'] : '';
 
 		if(isset($form_state['values']['record_type']) && !empty($form_state['values']['record_type'])){
@@ -439,6 +439,7 @@ function search_console_form_submit($form, &$form_state) {
 		// set query textfields
 		$form_state['input']['query']['value'] = $query;
 		$form_state['input']['encoded_query']['value'] = urlencode($query);
+		$form_state['query_reference'] = $query;
 		break;
 
 		case 'collections_url_submit':
@@ -458,7 +459,11 @@ function search_console_form_submit($form, &$form_state) {
 					}
 					$fqs .= '"' . end(explode('=', str_replace('"', '', $value))) . '"';
 					$query_parameters['fqs'] .= $fqs;
-				}else{
+				}
+				else if(reset(explode('=', $value)) == 'q') {
+					$query_parameters['q'] = urlencode(end(explode('=', $value)));
+				}
+				else{
 					$query_parameters[reset(explode('=', $value))] = end(explode('=', $value));
 				}
 			}
@@ -482,10 +487,11 @@ function search_console_form_submit($form, &$form_state) {
 				}
 				$query .= $key . '=' . $value;
 			}
-			
+
 			// set query textfields
 			$form_state['input']['query']['value'] = $query;
 			$form_state['input']['encoded_query']['value'] = urlencode($query);
+			$form_state['query_reference'] = reset(explode('&q=', $query)) . '&q=' .  ( urlencode(end(explode('&q=', $query))) );
 		}
 		break;
 
@@ -502,11 +508,11 @@ function search_console_form_submit($form, &$form_state) {
 				// set field default values
 			$form_state['input']['query']['value'] = urldecode($form_state['values']['encoded_query']['value']);
 		}
+		$form_state['query_reference'] = $query;
 		break;
 	}
 
 	if(!empty($query)){
-		$form_state['query_reference'] = $query;
 
 		// set the raw json results
 		$raw_json_results = _get_search_results_from_edan(isset($query) ? $query : '');
