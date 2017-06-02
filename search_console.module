@@ -48,13 +48,13 @@ function search_console_menu() {
     'access arguments' => array('use search console'),
     );
 
-  $items['search_console/full_json'] = array(
+  $items['full_json'] = array(
     'page callback' => '_full_json_page_callback',
     'page arguments' => array(),
     'access arguments' => array('use search console'),
     );
 
-  $items['search_console/full_record'] = array(
+  $items['full_record'] = array(
     'page callback' => '_full_record_page_callback',
     'page arguments' => array(),
     'access arguments' => array('use search console'),
@@ -73,7 +73,7 @@ function search_console_menu() {
 
 function _full_json_page_callback() {
   $path_parts = arg();
-  $query = $path_parts[2];
+  $query = $path_parts[1];
   $json = _get_search_results_from_edan($query);
 
   dumper($json);
@@ -81,10 +81,11 @@ function _full_json_page_callback() {
 
 function _full_record_page_callback() {
   $path_parts = arg();
-  $query = 'q=id:' . $path_parts[2];
+  $query = 'q=id:' . $path_parts[1];
   $json = _get_search_results_from_edan($query);
+  $object = json_decode($json, true);
 
-  dumper($json);
+  dumper($object['rows'][0]);
 }
 
 function _get_search_results_from_edan($query = '') {
@@ -150,17 +151,6 @@ function search_console_form($form, &$form_state){
     '#description' => 'The q parameter is normally the main query for the request. See Solr query syntax for more information on different types of queries and syntaxes.',
     '#group' => 'search_field_filters_tab',
     );
-  // $form['search_field_filters_tab']['fqs'] = array(
-  //  '#title' => t('fqs'),
-  //  '#type' => 'textfield',
-  //  '#description' => 'Applies a filter query to the search results. "fq" stands for Filter Query. This parameter can be used to specify a query that can be used to restrict the super set of documents that can be returned, without influencing score. It can be very useful for speeding up complex queries since the queries specified with fq are cached independently from the main query.',
-  //  '#states' => array(
-  //    'invisible' => array(
-  //      ':input[name="record_type"]' => array('value' => ''),
-  //      ),
-  //    ),
-  //  '#group' => 'search_field_filters_tab',
-  //  );
   $form['search_field_filters_tab']['rows'] = array(
     '#title' => t('rows ( 100 max )'),
     '#type' => 'textfield',
@@ -274,12 +264,23 @@ function search_console_form($form, &$form_state){
     '#group' => 'search_field_filters_tab',
     );
   // submit button
-  $form['search_field_filters_tab']['submit'] = array(
+  $form['search_field_filters_tab']['button_container'] = array(
+    '#type' => 'item',
+    '#attributes' => array('class' => array('container-inline')),
+    );
+  $form['search_field_filters_tab']['button_container']['submit'] = array(
     '#value' => 'Submit',
     '#type' => 'submit',
     '#name' => 'search_field_filters_submit',
     '#prefix' => '<br>',
     '#group' => 'search_field_filters_tab',
+    );
+  $form['search_field_filters_tab']['button_container']['clear'] = array(
+    '#value' => 'Clear',
+    '#type' => 'submit',
+    '#name' => 'filters_clear',
+    '#group' => 'search_field_filters_tab',
+    '#attributes' => array('style' => 'background: #008cba; color: #fff;'),
     );
 
 
@@ -303,12 +304,22 @@ function search_console_form($form, &$form_state){
     '#group' => 'query_tab',
     );
   // submit button
-  $form['query_tab']['submit'] = array(
+  $form['query_tab']['button_container'] = array(
+    '#type' => 'item',
+    '#attributes' => array('class' => array('container-inline')),
+    );
+  $form['query_tab']['button_container']['submit'] = array(
     '#value' => 'Submit',
     '#type' => 'submit',
     '#name' => 'query_submit',
-    '#prefix' => '<br>',
     '#group' => 'query_tab',
+    );
+  $form['query_tab']['button_container']['clear'] = array(
+    '#value' => 'Clear',
+    '#type' => 'submit',
+    '#name' => 'query_clear',
+    '#group' => 'query_tab',
+    '#attributes' => array('style' => 'background: #008cba; color: #fff;'),
     );
 
 
@@ -335,18 +346,75 @@ function search_console_form($form, &$form_state){
     '#group' => 'collections_url_tab',
     );
   // submit button
-  $form['collections_url_tab']['submit'] = array(
+  $form['collections_url_tab']['button_container'] = array(
+    '#type' => 'item',
+    '#attributes' => array('class' => array('container-inline')),
+    );
+  $form['collections_url_tab']['button_container']['submit'] = array(
     '#value' => 'Submit',
     '#type' => 'submit',
     '#name' => 'collections_url_submit',
     '#prefix' => '<br>',
     '#group' => 'collections_url_tab',
     );
+  $form['collections_url_tab']['button_container']['clear'] = array(
+    '#value' => 'Clear',
+    '#type' => 'submit',
+    '#name' => 'collections_clear',
+    '#group' => 'collections_url_tab',
+    '#attributes' => array('style' => 'background: #008cba; color: #fff;'),
+    );
 
 
 
 
+  $add_js = '
+    jQuery(document).ready(function() {
+      jQuery("#edit-clear").hover(
+      function() {
+        jQuery(this).css("background", "#0079a1")
+      },
+      function() {
+        jQuery(this).css("background", "#008cba")
+      }
+      );
 
+      jQuery("#edit-clear--2").hover(
+      function() {
+        jQuery(this).css("background", "#0079a1")
+      },
+      function() {
+        jQuery(this).css("background", "#008cba")
+      }
+      );
+
+      jQuery("#edit-clear--3").hover(
+      function() {
+        jQuery(this).css("background", "#0079a1")
+      },
+      function() {
+        jQuery(this).css("background", "#008cba")
+      }
+      );
+
+
+    jQuery("#edit-clear").click( function (e) {
+      e.preventDefault();
+      jQuery("#search-console-form")[0].reset();
+    });
+
+    jQuery("#edit-clear--2").click( function (e) {
+      e.preventDefault();
+      jQuery("#search-console-form")[0].reset();
+    });
+
+    jQuery("#edit-clear--3").click( function (e) {
+      e.preventDefault();
+      jQuery("#search-console-form")[0].reset();
+    });
+    });
+ ';
+  drupal_add_js($add_js, 'inline');
 
   // $form['rows_reference'] = array(
   //  '#type' => 'item',
@@ -379,16 +447,16 @@ function search_console_form($form, &$form_state){
         }
         $form['structured_search_results_tab']['structured_search_results'][$key] = array(
           '#type' => 'item',
-          '#markup' => '<pre>' . $fields . '<a href="/search_console/full_record/' . $record['id'] . '" target="_blank">View Full Record</a></pre>',
+          '#markup' => '<pre>' . $fields . '<a href="/full_record/' . $record['id'] . '" target="_blank">View Full Record</a></pre>',
           '#group' => 'structured_search_results_tab',
           );
       }
     }else{
       $form['structured_search_results_tab']['structured_search_results'] = array(
-          '#type' => 'item',
-          '#markup' => '<pre>The Query returned no results.</pre>',
-          '#group' => 'structured_search_results_tab',
-          );
+        '#type' => 'item',
+        '#markup' => '<pre>The Query returned no results.</pre>',
+        '#group' => 'structured_search_results_tab',
+        );
     }
   }
 
@@ -415,7 +483,7 @@ function search_console_form($form, &$form_state){
         $output = implode("\n", array_slice($lines, 0, 1000));
         $form['raw_json_results_tab']['raw_json_results'] = array(
           '#type' => 'item',
-          '#markup' => '<pre>' . $output . "</pre><a href='/search_console/full_json/" . $form_state['query_reference'] . "' target='_blank'>Click to view full JSON</h>",
+          '#markup' => '<pre>' . $output . "</pre><a href='/full_json/" . $form_state['query_reference'] . "' target='_blank'>Click to view full JSON</h>",
           '#group' => 'raw_json_results_tab',
           );
       }
@@ -455,7 +523,7 @@ function search_console_form_submit($form, &$form_state) {
       $record_type = $form_state['values']['record_type'];
       $query_parameters['fqs'][] = 'type:' . $record_type;
 
-      // add facets to search for
+      // add facets to search
       foreach ($form_state['values'] as $key => $value) {
         // if this field is of the type that starts with the current record type, then add it to the parameters array
         if(substr($key, 0, strlen($record_type)) == $record_type && !empty($value)){
@@ -469,7 +537,7 @@ function search_console_form_submit($form, &$form_state) {
     // add all fq parameters as fqs to the final query first
     $last_element_in_array = count($query_parameters['fqs']) - 1;
     foreach ($query_parameters['fqs'] as $key => $fq) {
-      $query .= str_replace(',', '+', $fq);
+      $query .= '"' . str_replace(',', '+', $fq) . '"';
       // add comma if this is not the last element
       if ($key != $last_element_in_array) {
         $query .= ',';
@@ -524,21 +592,21 @@ function search_console_form_submit($form, &$form_state) {
         $value = end(explode('=', $temp_query_param));
         switch ($key) {
           case 'fq':
-            $sanitized_value = str_replace('"', '', urldecode($value));
-            $query_parameters['fqs'][] = $sanitized_value;
-            break;
+          $sanitized_value = str_replace('"', '', urldecode($value));
+          $query_parameters['fqs'][] = $sanitized_value;
+          break;
           case 'q':
-            $query_parameters['q'] = $value;
+          $query_parameters['q'] = $value;
             // set the filters on the filters tab
-            $form_state['input']['q'] .= $value;
-            break;
+          $form_state['input']['q'] .= $value;
+          break;
           default:
-            $query_parameters[$key] = $value;
+          $query_parameters[$key] = $value;
             // set the filters on the filters tab
-            if (isset($form_state['input'][$key])) {
-              $form_state['input'][$key] = $value;
-            }
-            break;
+          if (isset($form_state['input'][$key])) {
+            $form_state['input'][$key] = $value;
+          }
+          break;
         }
       }
 
@@ -617,23 +685,23 @@ function search_console_form_submit($form, &$form_state) {
       $value = end(explode('=', $temp_query_param));
       switch ($key) {
         case 'fqs':
-          $fqs_array = explode(',', str_replace('"', '', substr($value, 1, -1)));
-          foreach ($fqs_array as $fq) {
-            $query_parameters['fqs'][] = $fq;
-          }
-          break;
+        $fqs_array = explode(',', str_replace('"', '', substr($value, 1, -1)));
+        foreach ($fqs_array as $fq) {
+          $query_parameters['fqs'][] = $fq;
+        }
+        break;
         case 'q':
-          $form_state['input']['q'] .= $value;
-          break;
+        $form_state['input']['q'] .= $value;
+        break;
         case 'rows':
         $form_state['input']['rows'] = $value;
         $form_state['input']['collections_rows'] = $value;
         break;
         default:
-          if (isset($form_state['input'][$key])) {
-            $form_state['input'][$key] = $value;
-          }
-          break;
+        if (isset($form_state['input'][$key])) {
+          $form_state['input'][$key] = $value;
+        }
+        break;
       }
     }
     foreach ($query_parameters['fqs'] as $key => $fq) {
@@ -739,7 +807,7 @@ class EDANInterface {
       $return[] = 'X-AuthContent: ' . $content;
     }
     return $return;
-}
+  }
   /**
    * Perform a curl request
    * @param args An associative array that can contain {q,fq,rows,start}
