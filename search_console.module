@@ -487,6 +487,10 @@ function search_console_form_submit($form, &$form_state) {
 
 		// set form reference for the final query
 		$form_state['query_reference'] = $query;
+
+		// set query on the query tab
+		$form_state['input']['query']['value'] = $query;
+		$form_state['encoded_query'] = urlencode($query);
 		break;
 
 
@@ -494,7 +498,13 @@ function search_console_form_submit($form, &$form_state) {
 		case 'collections_url_submit':
 			// get the query from a collections.si.edu url
 		if(!empty($form_state['values']['collections_url'])){
-				// set query
+
+			// reset the filters fields
+			$form_state['input']['q'] = '';
+			$form_state['input']['rows'] = 10;
+			$form_state['input']['start'] = 1;
+
+			// set query
 			$temp_query = end(explode('http://collections.si.edu/search/results.htm?', urldecode($form_state['values']['collections_url'])));
 			$temp_query_parameters = explode('&', $temp_query);
 			$query_parameters = array();
@@ -507,13 +517,20 @@ function search_console_form_submit($form, &$form_state) {
 				$value = end(explode('=', $temp_query_param));
 				switch ($key) {
 					case 'fq':
-						$query_parameters['fqs'][] = str_replace('"', '', urldecode($value));
+						$sanitized_value = str_replace('"', '', urldecode($value));
+						$query_parameters['fqs'][] = $sanitized_value;
 						break;
 					case 'q':
 						$query_parameters['q'] = $value;
+						// set the filters on the filters tab
+						$form_state['input']['q'] .= $value;
 						break;
 					default:
 						$query_parameters[$key] = $value;
+						// set the filters on the filters tab
+						if (isset($form_state['input'][$key])) {
+							$form_state['input'][$key] = $value;
+						}
 						break;
 				}
 			}
@@ -527,6 +544,13 @@ function search_console_form_submit($form, &$form_state) {
 				// add comma if this is not the last element
 				if ($key != $last_element_in_array) {
 					$query .= ',';
+				}
+
+				// set the filters on the filters tab
+				$fq_key = reset(explode(':', $fq));
+				$fq_value = end(explode(':', $fq));
+				if (isset($form_state['input']['edanmdm_' . $fq_key ])) {
+					$form_state['input']['edanmdm_' . $fq_key ] = $fq_value;
 				}
 			}
 			$query .= ']';
@@ -543,6 +567,7 @@ function search_console_form_submit($form, &$form_state) {
 			// add rows to the final query if necessary
 			if (!empty($form_state['input']['collections_rows'])) {
 				$query .= '&rows=' . $form_state['input']['collections_rows'];
+				$form_state['input']['rows'] = $form_state['input']['collections_rows'];
 			}
 
 			// get rid of unnecessary spaces in the query
@@ -551,6 +576,11 @@ function search_console_form_submit($form, &$form_state) {
 
 			// set form reference for the final query
 			$form_state['query_reference'] = $query;
+
+			// set query on the query tab
+			$form_state['input']['query']['value'] = $query;
+			$form_state['encoded_query'] = urlencode($query);
+			$form_state['input']['record_type'] = 'edanmdm';
 		}
 		break;
 
@@ -563,6 +593,50 @@ function search_console_form_submit($form, &$form_state) {
 			$form_state['encoded_query'] = urlencode($query);
 		}
 		$form_state['query_reference'] = $query;
+
+
+		// reset the filters fields
+		$form_state['input']['q'] = '';
+		$form_state['input']['rows'] = 10;
+		$form_state['input']['start'] = 1;
+		$form_state['input']['collections_url'] = '';
+		// fill in the other tabs using the query as reference
+		$temp_query_parameters = explode('&', $query);
+		$query_parameters['fqs'] = array();
+		foreach ($temp_query_parameters as $temp_query_param) {
+			// the key in this case is the parameter
+			$key = reset(explode('=', $temp_query_param));
+			// the value is what the parameter is set to
+			$value = end(explode('=', $temp_query_param));
+			switch ($key) {
+				case 'fqs':
+					$fqs_array = explode(',', str_replace('"', '', substr($value, 1, -1)));
+					foreach ($fqs_array as $fq) {
+						$query_parameters['fqs'][] = $fq;
+					}
+					break;
+				case 'q':
+					$form_state['input']['q'] .= $value;
+					break;
+				case 'rows':
+				$form_state['input']['rows'] = $value;
+				$form_state['input']['collections_rows'] = $value;
+				break;
+				default:
+					if (isset($form_state['input'][$key])) {
+						$form_state['input'][$key] = $value;
+					}
+					break;
+			}
+		}
+		foreach ($query_parameters['fqs'] as $key => $fq) {
+			// set the filters on the filters tab
+			$fq_key = reset(explode(':', $fq));
+			$fq_value = end(explode(':', $fq));
+			if (isset($form_state['input']['edanmdm_' . $fq_key ])) {
+				$form_state['input']['edanmdm_' . $fq_key ] = $fq_value;
+			}
+		}
 		break;
 	}
 
