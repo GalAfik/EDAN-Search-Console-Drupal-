@@ -54,6 +54,12 @@ function search_console_menu() {
 		'access arguments' => array('use search console'),
 		);
 
+	$items['search_console/full_record'] = array(
+		'page callback' => '_full_record_page_callback',
+		'page arguments' => array(),
+		'access arguments' => array('use search console'),
+		);
+
 	$items['search_console_settings'] = array(
 		'title' => t('Search Console Settings'),
 		'page callback' => 'drupal_get_form',
@@ -68,6 +74,14 @@ function search_console_menu() {
 function _full_json_page_callback() {
 	$path_parts = arg();
 	$query = $path_parts[2];
+	$json = _get_search_results_from_edan($query);
+
+	dumper($json);
+}
+
+function _full_record_page_callback() {
+	$path_parts = arg();
+	$query = 'q=id:' . $path_parts[2];
 	$json = _get_search_results_from_edan($query);
 
 	dumper($json);
@@ -136,17 +150,17 @@ function search_console_form($form, &$form_state){
 		'#description' => 'The q parameter is normally the main query for the request. See Solr query syntax for more information on different types of queries and syntaxes.',
 		'#group' => 'search_field_filters_tab',
 		);
-	$form['search_field_filters_tab']['fqs'] = array(
-		'#title' => t('fqs'),
-		'#type' => 'textfield',
-		'#description' => 'Applies a filter query to the search results. "fq" stands for Filter Query. This parameter can be used to specify a query that can be used to restrict the super set of documents that can be returned, without influencing score. It can be very useful for speeding up complex queries since the queries specified with fq are cached independently from the main query.',
-		'#states' => array(
-			'invisible' => array(
-				':input[name="record_type"]' => array('value' => ''),
-				),
-			),
-		'#group' => 'search_field_filters_tab',
-		);
+	// $form['search_field_filters_tab']['fqs'] = array(
+	// 	'#title' => t('fqs'),
+	// 	'#type' => 'textfield',
+	// 	'#description' => 'Applies a filter query to the search results. "fq" stands for Filter Query. This parameter can be used to specify a query that can be used to restrict the super set of documents that can be returned, without influencing score. It can be very useful for speeding up complex queries since the queries specified with fq are cached independently from the main query.',
+	// 	'#states' => array(
+	// 		'invisible' => array(
+	// 			':input[name="record_type"]' => array('value' => ''),
+	// 			),
+	// 		),
+	// 	'#group' => 'search_field_filters_tab',
+	// 	);
 	$form['search_field_filters_tab']['rows'] = array(
 		'#title' => t('rows ( 100 max )'),
 		'#type' => 'textfield',
@@ -165,11 +179,11 @@ function search_console_form($form, &$form_state){
 	$form['search_field_filters_tab']['record_type'] = array(
 		'#type' => 'select',
 		'#title' => t('Record Type'),
-		'#description' => 'This selection will limit the results to only show records of the selected type. <span style="color:red;">More options are being added.</span>',
+		'#description' => 'This selection will limit the results to only show records of the selected type.',
 		'#options' => array(
-			// '' => t('Any'),
+			'' => t('Any'),
 			'edanmdm' => t('edanmdm'),
-			// 'ogmt' => t('ogmt'),
+			'ogmt' => t('ogmt'),
 			),
 		'#group' => 'search_field_filters_tab',
 		);
@@ -282,6 +296,13 @@ function search_console_form($form, &$form_state){
 		'#group' => 'collections_url_tab',
 		'#maxlength' => 100000,
 		);
+	$form['collections_url_tab']['collections_rows'] = array(
+		'#title' => t('rows ( 100 max )'),
+		'#type' => 'textfield',
+		'#default_value' => 10,
+		'#description' => 'All Collections.si.edu searches default to <b>10 rows</b>.',
+		'#group' => 'collections_url_tab',
+		);
 	// submit button
 	$form['collections_url_tab']['submit'] = array(
 		'#value' => 'Submit',
@@ -306,7 +327,8 @@ function search_console_form($form, &$form_state){
 		);
 	$form['query_tab']['encoded_query'] = array(
 		'#title' => t('Encoded Query'),
-		'#type' => 'text_format',
+		'#type' => 'item',
+		'#markup' => '<pre>' . (isset($form_state['encoded_query']) ? $form_state['encoded_query'] : '') . '</pre>',
 		'#description' => 'This is a URL-safe encoded query to use in your application.',
 		'#group' => 'query_tab',
 		);
@@ -351,7 +373,7 @@ function search_console_form($form, &$form_state){
 				}
 				$form['structured_search_results_tab']['structured_search_results'][$key] = array(
 					'#type' => 'item',
-					'#markup' => '<pre>' . $fields . '</pre>',
+					'#markup' => '<pre>' . $fields . '<a href="/search_console/full_record/' . $record['id'] . '" target="_blank">View Full Record</a></pre>',
 					'#group' => 'structured_search_results_tab',
 					);
 			}
@@ -405,43 +427,70 @@ function search_console_form($form, &$form_state){
 
 function search_console_form_submit($form, &$form_state) {
 
+	// initialize the empty query that will eventually be submitted to EDAN for results
 	$query = '';
 
+	// check which tab on the search form submitted to this function and therefore, which fields need to be checked for relevant data
 	switch($form_state['triggering_element']['#name']){
+
+		// this is the filters tab form
 		case 'search_field_filters_submit':
-			// initialize query and set rows if rows field is set
-		if(!empty($form_state['values']['rows'])){
-			$query .= '&rows=' . $form_state['values']['rows'];
-			if($form_state['values']['rows'] > 100){
-				drupal_set_message('You exceeded the maximum number of rows. Your Query defaulted to 10 rows.', 'error');
-			}
-		}
-		$query .= !empty($form_state['values']['start']) ? '&start=' . $form_state['values']['start'] : '';
-		$query .= !empty($form_state['values']['q']) ? '&q="' . str_replace(' ', '+', $form_state['values']['q']) . '"' : '';
-		$query .= !empty($form_state['values']['fqs']) ? '&fqs=' . $form_state['values']['fqs'] : '';
 
+		// add optional parameters if they are set
+		$query_parameters = array();
+		$query_parameters['q'] = !empty($form_state['values']['q']) ? $form_state['values']['q'] : '';
+		$query_parameters['rows'] = !empty($form_state['values']['rows']) ? $form_state['values']['rows'] : '';
+		$query_parameters['start'] = !empty($form_state['values']['start']) ? $form_state['values']['start'] : '';
+		$query_parameters['fqs'] = array();
+
+		// build out the fqs from applicable, set facets and set record type according to dropdown selection
 		if(isset($form_state['values']['record_type']) && !empty($form_state['values']['record_type'])){
-				// look for only records of type record_type
-			$query .= '&fqs=["type:' . $form_state['values']['record_type'] . '"';
-
-				// add facets to search for
+			// look for only records of type record_type
 			$record_type = $form_state['values']['record_type'];
+			$query_parameters['fqs'][] = 'type:' . $record_type;
+
+			// add facets to search for
 			foreach ($form_state['values'] as $key => $value) {
+				// if this field is of the type that starts with the current record type, then add it to the parameters array
 				if(substr($key, 0, strlen($record_type)) == $record_type && !empty($value)){
-					$query .= ',"' . str_replace($record_type . '_', '', $key) . ':' . $value . '"';
+					$query_parameters['fqs'][] = str_replace($record_type . '_', '', $key) . ':' . $value;
 				}
 			}
-
-			// close fqs
-			$query .= ']';
 		}
 
-		// set query textfields
-		$form_state['input']['query']['value'] = $query;
-		$form_state['input']['encoded_query']['value'] = urlencode($query);
+		// build out the final query
+		$query = 'fqs=[';
+		// add all fq parameters as fqs to the final query first
+		$last_element_in_array = count($query_parameters['fqs']) - 1;
+		foreach ($query_parameters['fqs'] as $key => $fq) {
+			$query .= str_replace(',', '+', $fq);
+			// add comma if this is not the last element
+			if ($key != $last_element_in_array) {
+				$query .= ',';
+			}
+		}
+		$query .= ']';
+		// unset fqs from the parameters to make sure it's not reapplied
+		unset($query_parameters['fqs']);
+		foreach ($query_parameters as $key => $value) {
+			// only add the ampersand if the query is not empty
+			if (!empty($query)) {
+				$query .= '&';
+			}
+			// add value to the query
+			$query .= $key . '=' . str_replace(',', '+', $value);
+		}
+
+		// get rid of unnecessary spaces in the query
+		$query = str_replace(' ', '+', $query);
+		$query = preg_replace('/[++]+/', '+', $query);
+
+		// set form reference for the final query
 		$form_state['query_reference'] = $query;
 		break;
 
+
+		// this is the collections url form
 		case 'collections_url_submit':
 			// get the query from a collections.si.edu url
 		if(!empty($form_state['values']['collections_url'])){
@@ -449,69 +498,75 @@ function search_console_form_submit($form, &$form_state) {
 			$temp_query = end(explode('http://collections.si.edu/search/results.htm?', urldecode($form_state['values']['collections_url'])));
 			$temp_query_parameters = explode('&', $temp_query);
 			$query_parameters = array();
-			$query_parameters['fqs'] = '';
+			$query_parameters['fqs'] = array();
 			// set the key to the parameter name and the value to just the value
-			foreach ($temp_query_parameters as $value) {
-				if(reset(explode('=', $value)) == 'fq'){
-					$fqs = '';
-					if(!empty($query_parameters['fqs'])){
-						$fqs .= ',';
-					}
-					$fqs .= '"' . end(explode('=', str_replace('"', '', $value))) . '"';
-					$query_parameters['fqs'] .= $fqs;
-				}
-				else if(reset(explode('=', $value)) == 'q') {
-					$query_parameters['q'] = urlencode(end(explode('=', $value)));
-				}
-				else{
-					$query_parameters[reset(explode('=', $value))] = end(explode('=', $value));
-				}
-			}
-			$query_parameters['fqs'] = urlencode('[' . $query_parameters['fqs'] . ']');
-			// set facets and fields on filters page according to url query
-			// distribute values across facets and fields
-			foreach ($query_parameters as $key => $value) {
-				if (array_key_exists($key, $form_state['input'])){
-					$form_state['input'][$key] = $value;
-				}
-				// check for facet fields
-				if (array_key_exists('edanmdm_' . $key, $form_state['input'])){
-					$form_state['input']['edanmdm_' . $key] = $value;
+			foreach ($temp_query_parameters as $temp_query_param) {
+				// the key in this case is the parameter
+				$key = reset(explode('=', $temp_query_param));
+				// the value is what the parameter is set to
+				$value = end(explode('=', $temp_query_param));
+				switch ($key) {
+					case 'fq':
+						$query_parameters['fqs'][] = str_replace('"', '', urldecode($value));
+						break;
+					case 'q':
+						$query_parameters['q'] = $value;
+						break;
+					default:
+						$query_parameters[$key] = $value;
+						break;
 				}
 			}
 
-			$query = '';
+			// build out the final query
+			$query = 'fqs=[';
+			// add all fq parameters as fqs to the final query first
+			$last_element_in_array = count($query_parameters['fqs']) - 1;
+			foreach ($query_parameters['fqs'] as $key => $fq) {
+				$query .= str_replace(',', '+', $fq);
+				// add comma if this is not the last element
+				if ($key != $last_element_in_array) {
+					$query .= ',';
+				}
+			}
+			$query .= ']';
+			// unset fqs from the parameters to make sure it's not reapplied
+			unset($query_parameters['fqs']);
 			foreach ($query_parameters as $key => $value) {
-				if(!empty($query)){
+				// only add the ampersand if the query is not empty
+				if (!empty($query)) {
 					$query .= '&';
 				}
-				$query .= $key . '=' . $value;
+				// add value to the query
+				$query .= $key . '=' . str_replace(',', '+', $value);
+			}
+			// add rows to the final query if necessary
+			if (!empty($form_state['input']['collections_rows'])) {
+				$query .= '&rows=' . $form_state['input']['collections_rows'];
 			}
 
-			// set query textfields
-			$form_state['input']['query']['value'] = $query;
-			$form_state['input']['encoded_query']['value'] = urlencode($query);
-			$form_state['query_reference'] = reset(explode('&q=', $query)) . '&q=' .  ( urlencode(end(explode('&q=', $query))) );
+			// get rid of unnecessary spaces in the query
+			$query = str_replace(' ', '+', $query);
+			$query = preg_replace('/[+]{2,}/', '+', $query);
+
+			// set form reference for the final query
+			$form_state['query_reference'] = $query;
 		}
 		break;
 
+
+		// this is the simple query form
 		case 'query_submit':
-			// set the query
 		if(!empty($form_state['values']['query']['value'])){
-				// set query
-			$query = $form_state['values']['query']['value'];
-				// set field default values
-			$form_state['input']['encoded_query']['value'] = urlencode($form_state['values']['query']['value']);
-		}else if(!empty($form_state['values']['encoded_query']['value'])){
-				// set query
-			$query = urldecode($form_state['values']['encoded_query']['value']);
-				// set field default values
-			$form_state['input']['query']['value'] = urldecode($form_state['values']['encoded_query']['value']);
+			$query = str_replace(' ', '+', $form_state['values']['query']['value']);
+				// set the encoded query for reference
+			$form_state['encoded_query'] = urlencode($query);
 		}
 		$form_state['query_reference'] = $query;
 		break;
 	}
 
+	// this block submits the query to EDAN and cleans up/prints out the results for the user
 	if(!empty($query)){
 
 		// set the raw json results
@@ -520,11 +575,11 @@ function search_console_form_submit($form, &$form_state) {
 
 		// set the structured search results
 		$raw_json = json_decode($raw_json_results, true);
-		$form_state['rows_reference'] = $raw_json['numFound'];
-		// reset the results
-		$form_state['structured_search_results'] = array();
-		// add rows to results
 		if(isset($raw_json['rows'])){
+			$form_state['rows_reference'] = $raw_json['numFound'];
+			// reset the results
+			$form_state['structured_search_results'] = array();
+			// add rows to results
 			foreach ($raw_json['rows'] as $key => $record) {
 				$form_state['structured_search_results'][] = $record;
 			}
