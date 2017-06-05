@@ -77,16 +77,17 @@ function _full_json_page_callback() {
   $query = $path_parts[1];
   $json = _get_search_results_from_edan($query);
 
-  dumper($json);
+  echo '<pre>' . $json . '</pre>';
+  exit();
 }
 
 function _full_record_page_callback() {
   $path_parts = arg();
   $query = 'q=id:' . $path_parts[1];
   $json = _get_search_results_from_edan($query);
-  $object = json_decode($json, true);
 
-  dumper($object['rows'][0]);
+  echo '<pre>' . $json . '</pre>';
+  exit();
 }
 
 function _get_search_results_from_edan($query = '') {
