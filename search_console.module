@@ -115,14 +115,9 @@ function _get_search_results_from_edan($query = '') {
 
 function search_console_form($form, &$form_state){
 
-  drupal_add_js(
-    drupal_get_path('module', 'search_console') . '/includes/clipboard.min.js',
-    array('scope' => 'footer', 'weight' => 51)
-    );
   //hide parts of description box
   $js = 'jQuery().ready(function(){
     jQuery(".filter-wrapper").hide();
-    new Clipboard(".btn");
   });';
   drupal_add_js($js, 'inline');
 
@@ -459,22 +454,44 @@ function search_console_form($form, &$form_state){
 
     if(!empty($form_state['raw_json_results'])) {
       if(substr_count( $form_state['raw_json_results'], "\n" ) <= 1000){
-
-        $form['raw_json_results_tab']['raw_json_results'] = array(
-          '#type' => 'item',
-          '#markup' => '<button type="button" class="btn" data-clipboard-action="copy" data-clipboard-target="#holdtext">Copy to clipboard</button><pre id="holdtext">' . $form_state['raw_json_results'] . '</pre>',
-          '#group' => 'raw_json_results_tab',
-          );
+        $output = $form_state['raw_json_results'];
+        $link_to_fulltext = '';
       }else {
-
         $lines = explode("\n", $form_state['raw_json_results']);
         $output = implode("\n", array_slice($lines, 0, 1000));
-        $form['raw_json_results_tab']['raw_json_results'] = array(
-          '#type' => 'item',
-          '#markup' => '<pre>' . $output . "</pre><a href='/full_json/" . $form_state['query_reference'] . "' target='_blank'>Click to view full JSON</h>",
-          '#group' => 'raw_json_results_tab',
-          );
+        $link_to_fulltext = '<a href="/full_json/' . $form_state['query_reference'] . '"" target="_blank">Click to view full JSON</a>';
       }
+
+      $copy_js = 'jQuery().ready(function(){
+
+        jQuery("#edit-copy-to-clipboard").click( function (e) {
+          e.preventDefault();
+          var temp = jQuery("<input>");
+          jQuery("body").append(temp);
+          temp.val(jQuery("#holdtext").text()).select();
+          document.execCommand("copy");
+          temp.remove();
+        });
+
+      });';
+      drupal_add_js($copy_js, 'inline');
+
+      $form['raw_json_results_tab']['copy_to_clipboard'] = array(
+        '#value' => 'Copy to Clipboard',
+        '#type' => 'submit',
+        '#name' => 'copy',
+        '#group' => 'raw_json_results_tab',
+        '#attributes' => array('style' => '-webkit-border-radius: 0px;'),
+        );
+
+      // print out the json output
+      $form['raw_json_results_tab']['raw_json_results'] = array(
+        '#type' => 'item',
+        '#markup' =>
+        '<div id="holdtext" style="display:none;">' . $form_state['raw_json_results'] . '</div>
+        <pre>' . $output . '</pre>' . $link_to_fulltext,
+        '#group' => 'raw_json_results_tab',
+        );
     }
   }
   if(!empty($form_state['structured_search_results']) || !empty($form_state['raw_json_results'])){
