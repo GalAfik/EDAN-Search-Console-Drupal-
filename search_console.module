@@ -194,7 +194,7 @@ function search_console_form($form, &$form_state){
     '#options' => array(
       '' => t('Any'),
       'edanmdm' => t('edanmdm'),
-      'ogmt' => t('ogmt'),
+      'objectgroup' => t('ogmt'),
       ),
     '#group' => 'search_field_filters_tab',
     );
@@ -442,7 +442,13 @@ function search_console_form($form, &$form_state){
       case "select-one":
       case "text":
       case "textarea":
-      jQuery(this).val("");
+      if (jQuery(this).attr("id") == "edit-rows") {
+        jQuery(this).val("10");
+      } else if (jQuery(this).attr("id") == "edit-start") {
+        jQuery(this).val("1");
+      } else {
+        jQuery(this).val("");
+      }
       break;
       case "checkbox":
       case "radio":
@@ -505,7 +511,7 @@ if(isset($form_state['structured_search_results'])){
       // add an image to the result if one exists
       $image = '';
       if (isset($record['content']['descriptiveNonRepeating']['online_media']['mediaCount']) && $record['content']['descriptiveNonRepeating']['online_media']['mediaCount'] >= 1) {
-        $image = '<a href="' . $record['content']['descriptiveNonRepeating']['online_media']['media'][0]['content'] . '" target="_blank"><img src="' . $record['content']['descriptiveNonRepeating']['online_media']['media'][0]['thumbnail'] . '" alt="' . $record['content']['descriptiveNonRepeating']['online_media']['media'][0]['idsId'] . '" style="max-width: 25%;display: block;margin: auto;"></a>';
+        $image = '<a href="' . $record['content']['descriptiveNonRepeating']['online_media']['media'][0]['content'] . '" target="_blank"><img src="' . $record['content']['descriptiveNonRepeating']['online_media']['media'][0]['thumbnail'] . '" style="max-width: 25%;display: block;margin: auto;"></a>';
       }
 
       $form['structured_search_results_tab']['structured_search_results'][$key] = array(
@@ -822,12 +828,12 @@ function search_console_form_submit($form, &$form_state) {
     drupal_set_message('You have not entered a "q" value! Your EDAN search will return a list of generic records.', 'warning');
   }
     // rows is invalid
-  if (!is_numeric($query_parameters['rows']) || $query_parameters['rows'] <= 0) {
-    drupal_set_message('The "rows" value you have entered seems to be invalid (' . (!is_null($query_parameters['rows']) ? $query_parameters['rows'] : 'EMPTY VALUE') . '). Make sure that "rows" is a positive integer between 0 and 100.', 'warning');
+  if (!isset($query_parameters['rows']) || !is_numeric($query_parameters['rows']) || $query_parameters['rows'] <= 0) {
+    drupal_set_message('The "rows" value you have entered seems to be invalid (' . (isset($query_parameters['rows']) ? $query_parameters['rows'] : 'EMPTY VALUE') . '). Make sure that "rows" is a positive integer between 1 and 100.', 'warning');
   }
     // start is invalid
-  if (!is_numeric($query_parameters['start']) || $query_parameters['start'] < 0) {
-    drupal_set_message('The "start" value you have entered seems to be invalid (' . (!is_null($query_parameters['start']) ? $query_parameters['start'] : 'EMPTY VALUE') . '). Make sure that "start" is a positive integer above 0.', 'warning');
+  if (!isset($query_parameters['start']) || !is_numeric($query_parameters['start']) || $query_parameters['start'] < 0) {
+    drupal_set_message('The "start" value you have entered seems to be invalid (' . (isset($query_parameters['start']) ? $query_parameters['start'] : 'EMPTY VALUE') . '). Make sure that "start" is a positive integer above 0.', 'warning');
   }
 
     // set the raw json results
