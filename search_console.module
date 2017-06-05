@@ -368,7 +368,24 @@ function search_console_form($form, &$form_state){
 
   // this js script handles styling and actions for the clear buttons on all 3 forms
   $clear_button_js = '
+  function clear_form_elements(ele) {
+    jQuery(ele).find(":input").each(function() {
+      switch(this.type) {
+        case "password":
+        case "select-multiple":
+        case "select-one":
+        case "text":
+        case "textarea":
+        jQuery(this).val("");
+        break;
+        case "checkbox":
+        case "radio":
+        this.checked = false;
+      }
+    });
+  }
   jQuery(document).ready(function() {
+
     jQuery("#edit-clear, #edit-clear--2, #edit-clear--3").hover(
     function() {
       jQuery(this).css("background", "#0079a1")
@@ -380,7 +397,7 @@ function search_console_form($form, &$form_state){
 
     jQuery("#edit-clear, #edit-clear--2, #edit-clear--3").click( function (e) {
       e.preventDefault();
-      jQuery("#search-console-form")[0].reset();
+      clear_form_elements(jQuery("#search-console-form"));
     });
   });
   ';
