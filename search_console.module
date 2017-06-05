@@ -114,6 +114,30 @@ function _get_search_results_from_edan($query = '') {
   return $results_raw;
 }
 
+function _get_facets_from_edan() {
+
+  $config = require('config.php');
+  $host = variable_get('search_console_host', $config->host);
+  $authKey = variable_get('search_console_auth_key', $config->auth_key);
+  $appId = variable_get('search_console_app_id', $config->app_id);
+  // return $resp;
+  date_default_timezone_set('UTC');
+  // Specify your appid and key below
+  $config = array(
+    'edan_server' => $host,
+    'edan_app_id' => $appId,
+    'edan_auth_key' => $authKey,
+    'edan_tier_type' => 1,
+    );
+  // Example usage
+  $edan = new EDANInterface($config['edan_server'], $config['edan_app_id'], $config['edan_auth_key'], $config['edan_tier_type']);
+  // Request
+  $service = 'metadata/v1.1/metadata/getFacets.htm'; // API Endpoint
+  // Response
+  $results_raw = $edan->sendRequest('', $service, FALSE, $info = '');
+  return $results_raw;
+}
+
 function search_console_form($form, &$form_state){
 
   //hide parts of description box
@@ -284,7 +308,7 @@ function search_console_form($form, &$form_state){
   drupal_add_library('system', 'ui.autocomplete');
   // following this, autocomplete_options contains an array of facet names that each contains an array of possible facet values for that field
   $autocomplete_options = array();
-  $results = json_decode(_get_search_results_from_edan(), TRUE);
+  $results = json_decode(_get_facets_from_edan(), TRUE);
   foreach ($results['facets'] as $facet_name => $facet_values) {
     foreach ($facet_values as $facet_value) {
       $autocomplete_options[ $facet_name ][] = $facet_value[0];
@@ -316,235 +340,239 @@ function search_console_form($form, &$form_state){
       jQuery(document).ready(function() {
         var tags =' . json_encode($autocomplete_options[$facet_field_name]) . ';
         jQuery("#edit-edanmdm-' . str_replace('_', '-', $facet_field_name) . '").autocomplete({
-          source: tags
+          source: tags,
+          minLength: 0
         });
-      });';
-      drupal_add_js($autocomplete_js, 'inline');
-    }
-  }
+        jQuery("#edit-edanmdm-' . str_replace('_', '-', $facet_field_name) . '").click(function() {
+          jQuery("#edit-edanmdm-' . str_replace('_', '-', $facet_field_name) . '").autocomplete( "search", "" );
+       });
+     });';
+     drupal_add_js($autocomplete_js, 'inline');
+   }
+ }
 
 
-  $form['query_tab'] = array(
-    '#type'  => 'fieldset',
-    '#title' => t('Query'),
-    '#group' => 'group_tabs',
-    );
-  $form['query_tab']['query'] = array(
-    '#title' => t('Raw Decoded Query'),
-    '#type' => 'text_format',
-    '#description' => 'You may enter your search filters as a raw query into this field in order to narrow down your search results.',
-    '#group' => 'query_tab',
-    );
-  $form['query_tab']['encoded_query'] = array(
-    '#title' => t('Encoded Query'),
-    '#type' => 'item',
-    '#markup' => '<pre>' . (isset($form_state['encoded_query']) ? $form_state['encoded_query'] : '') . '</pre>',
-    '#description' => 'This is a URL-safe encoded query to use in your application.',
-    '#group' => 'query_tab',
-    );
+ $form['query_tab'] = array(
+  '#type'  => 'fieldset',
+  '#title' => t('Query'),
+  '#group' => 'group_tabs',
+  );
+ $form['query_tab']['query'] = array(
+  '#title' => t('Raw Decoded Query'),
+  '#type' => 'text_format',
+  '#description' => 'You may enter your search filters as a raw query into this field in order to narrow down your search results.',
+  '#group' => 'query_tab',
+  );
+ $form['query_tab']['encoded_query'] = array(
+  '#title' => t('Encoded Query'),
+  '#type' => 'item',
+  '#markup' => '<pre>' . (isset($form_state['encoded_query']) ? $form_state['encoded_query'] : '') . '</pre>',
+  '#description' => 'This is a URL-safe encoded query to use in your application.',
+  '#group' => 'query_tab',
+  );
   // submit button
-  $form['query_tab']['button_container'] = array(
-    '#type' => 'item',
-    '#attributes' => array('class' => array('container-inline')),
-    );
-  $form['query_tab']['button_container']['submit'] = array(
-    '#value' => 'Submit',
-    '#type' => 'submit',
-    '#name' => 'query_submit',
-    '#group' => 'query_tab',
-    );
-  $form['query_tab']['button_container']['clear'] = array(
-    '#value' => 'Clear',
-    '#type' => 'submit',
-    '#name' => 'query_clear',
-    '#group' => 'query_tab',
-    '#attributes' => array('style' => 'background: #008cba; color: #fff;'),
-    );
+ $form['query_tab']['button_container'] = array(
+  '#type' => 'item',
+  '#attributes' => array('class' => array('container-inline')),
+  );
+ $form['query_tab']['button_container']['submit'] = array(
+  '#value' => 'Submit',
+  '#type' => 'submit',
+  '#name' => 'query_submit',
+  '#group' => 'query_tab',
+  );
+ $form['query_tab']['button_container']['clear'] = array(
+  '#value' => 'Clear',
+  '#type' => 'submit',
+  '#name' => 'query_clear',
+  '#group' => 'query_tab',
+  '#attributes' => array('style' => 'background: #008cba; color: #fff;'),
+  );
 
 
 
 
 
-  $form['collections_url_tab'] = array(
-    '#type'  => 'fieldset',
-    '#title' => t('URL'),
-    '#group' => 'group_tabs',
-    );
-  $form['collections_url_tab']['collections_url'] = array(
-    '#title' => t('Collections URL'),
-    '#type' => 'textfield',
-    '#description' => 'Paste a <b><a href="http://collections.si.edu" target="_blank">collection.si.edu</a></b> URL into the field above to replicate the search on this page. You may modify the search using the Search Filters above or by adding requirements to the Raw Query below.',
-    '#group' => 'collections_url_tab',
-    '#maxlength' => 100000,
-    );
-  $form['collections_url_tab']['collections_rows'] = array(
-    '#title' => t('rows ( 100 max )'),
-    '#type' => 'textfield',
-    '#default_value' => 10,
-    '#description' => 'All Collections.si.edu searches default to <b>10 rows</b>.',
-    '#group' => 'collections_url_tab',
-    );
+ $form['collections_url_tab'] = array(
+  '#type'  => 'fieldset',
+  '#title' => t('URL'),
+  '#group' => 'group_tabs',
+  );
+ $form['collections_url_tab']['collections_url'] = array(
+  '#title' => t('Collections URL'),
+  '#type' => 'textfield',
+  '#description' => 'Paste a <b><a href="http://collections.si.edu" target="_blank">collection.si.edu</a></b> URL into the field above to replicate the search on this page. You may modify the search using the Search Filters above or by adding requirements to the Raw Query below.',
+  '#group' => 'collections_url_tab',
+  '#maxlength' => 100000,
+  );
+ $form['collections_url_tab']['collections_rows'] = array(
+  '#title' => t('rows ( 100 max )'),
+  '#type' => 'textfield',
+  '#default_value' => 10,
+  '#description' => 'All Collections.si.edu searches default to <b>10 rows</b>.',
+  '#group' => 'collections_url_tab',
+  );
   // submit button
-  $form['collections_url_tab']['button_container'] = array(
-    '#type' => 'item',
-    '#attributes' => array('class' => array('container-inline')),
-    );
-  $form['collections_url_tab']['button_container']['submit'] = array(
-    '#value' => 'Submit',
-    '#type' => 'submit',
-    '#name' => 'collections_url_submit',
-    '#prefix' => '<br>',
-    '#group' => 'collections_url_tab',
-    );
-  $form['collections_url_tab']['button_container']['clear'] = array(
-    '#value' => 'Clear',
-    '#type' => 'submit',
-    '#name' => 'collections_clear',
-    '#group' => 'collections_url_tab',
-    '#attributes' => array('style' => 'background: #008cba; color: #fff;'),
-    );
+ $form['collections_url_tab']['button_container'] = array(
+  '#type' => 'item',
+  '#attributes' => array('class' => array('container-inline')),
+  );
+ $form['collections_url_tab']['button_container']['submit'] = array(
+  '#value' => 'Submit',
+  '#type' => 'submit',
+  '#name' => 'collections_url_submit',
+  '#prefix' => '<br>',
+  '#group' => 'collections_url_tab',
+  );
+ $form['collections_url_tab']['button_container']['clear'] = array(
+  '#value' => 'Clear',
+  '#type' => 'submit',
+  '#name' => 'collections_clear',
+  '#group' => 'collections_url_tab',
+  '#attributes' => array('style' => 'background: #008cba; color: #fff;'),
+  );
 
   // this js script handles styling and actions for the clear buttons on all 3 forms
-  $clear_button_js = '
-  function clear_form_elements(ele) {
-    jQuery(ele).find(":input").each(function() {
-      switch(this.type) {
-        case "password":
-        case "select-multiple":
-        case "select-one":
-        case "text":
-        case "textarea":
-        jQuery(this).val("");
-        break;
-        case "checkbox":
-        case "radio":
-        this.checked = false;
-      }
-    });
-  }
-  jQuery(document).ready(function() {
-
-    jQuery("#edit-clear, #edit-clear--2, #edit-clear--3").hover(
-    function() {
-      jQuery(this).css("background", "#0079a1")
-    },
-    function() {
-      jQuery(this).css("background", "#008cba")
+ $clear_button_js = '
+ function clear_form_elements(ele) {
+  jQuery(ele).find(":input").each(function() {
+    switch(this.type) {
+      case "password":
+      case "select-multiple":
+      case "select-one":
+      case "text":
+      case "textarea":
+      jQuery(this).val("");
+      break;
+      case "checkbox":
+      case "radio":
+      this.checked = false;
     }
-    );
-
-    jQuery("#edit-clear, #edit-clear--2, #edit-clear--3").click( function (e) {
-      e.preventDefault();
-      clear_form_elements(jQuery("#search-console-form"));
-    });
   });
-  ';
-  drupal_add_js($clear_button_js, 'inline');
+}
+jQuery(document).ready(function() {
 
-  $form['rows_reference'] = array(
-   '#type' => 'item',
-   '#markup' => isset($form_state['rows_reference']) ? '<b>Number of Records Found:</b><pre>' . $form_state['rows_reference'] . '</pre>' : '',
-   );
-  $form['query_reference'] = array(
-    '#type' => 'item',
-    '#markup' => isset($form_state['query_reference']) ? '<b>Last Valid Query:</b><pre>' . str_replace(' ', '+', urldecode($form_state['query_reference'])) . '</pre>' : '',
-    );
+  jQuery("#edit-clear, #edit-clear--2, #edit-clear--3").hover(
+  function() {
+    jQuery(this).css("background", "#0079a1")
+  },
+  function() {
+    jQuery(this).css("background", "#008cba")
+  }
+  );
+
+  jQuery("#edit-clear, #edit-clear--2, #edit-clear--3").click( function (e) {
+    e.preventDefault();
+    clear_form_elements(jQuery("#search-console-form"));
+  });
+});
+';
+drupal_add_js($clear_button_js, 'inline');
+
+$form['rows_reference'] = array(
+ '#type' => 'item',
+ '#markup' => isset($form_state['rows_reference']) ? '<b>Number of Records Found:</b><pre>' . $form_state['rows_reference'] . '</pre>' : '',
+ );
+$form['query_reference'] = array(
+  '#type' => 'item',
+  '#markup' => isset($form_state['query_reference']) ? '<b>Last Valid Query:</b><pre>' . str_replace(' ', '+', urldecode($form_state['query_reference'])) . '</pre>' : '',
+  );
 
   // results display area
-  $form['group_search_results_tabs'] = array(
-    '#type'     => 'horizontal_tabs',
-    '#attached' => array('library' => array(array('field_group', 'horizontal-tabs'))),
+$form['group_search_results_tabs'] = array(
+  '#type'     => 'horizontal_tabs',
+  '#attached' => array('library' => array(array('field_group', 'horizontal-tabs'))),
+  );
+
+if(isset($form_state['structured_search_results'])){
+  $form['structured_search_results_tab'] = array(
+    '#type'  => 'fieldset',
+    '#title' => t('Structured Results'),
+    '#group' => 'group_search_results_tabs',
     );
 
-  if(isset($form_state['structured_search_results'])){
-    $form['structured_search_results_tab'] = array(
-      '#type'  => 'fieldset',
-      '#title' => t('Structured Results'),
-      '#group' => 'group_search_results_tabs',
-      );
-
-    if(!empty($form_state['structured_search_results'])){
-      foreach ($form_state['structured_search_results'] as $key => $record) {
+  if(!empty($form_state['structured_search_results'])){
+    foreach ($form_state['structured_search_results'] as $key => $record) {
         // get fields printed out nicely for the structured search resutls
-        $fields = '';
-        foreach ($record as $field_key => $field_value) {
-          if($field_key != 'content') $fields .= '<strong>' . $field_key . ':</strong> ' . $field_value . "\n";
-        }
-        $form['structured_search_results_tab']['structured_search_results'][$key] = array(
-          '#type' => 'item',
-          '#markup' => '<pre>' . $fields . '<a href="/full_record/' . $record['id'] . '" target="_blank">View Full Record</a></pre>',
-          '#group' => 'structured_search_results_tab',
-          );
+      $fields = '';
+      foreach ($record as $field_key => $field_value) {
+        if($field_key != 'content') $fields .= '<strong>' . $field_key . ':</strong> ' . $field_value . "\n";
       }
-    }else{
-      drupal_set_message('Your search returned no results. This may be due to a lack of matching records within EDAN or an invalid parameter. Please check that all of your parameters are set correctly.', 'warning');
-      $form['structured_search_results_tab']['structured_search_results'] = array(
+      $form['structured_search_results_tab']['structured_search_results'][$key] = array(
         '#type' => 'item',
-        '#markup' => '<pre>The Query returned no results.</pre>',
+        '#markup' => '<pre>' . $fields . '<a href="/full_record/' . $record['id'] . '" target="_blank">View Full Record</a></pre>',
         '#group' => 'structured_search_results_tab',
         );
     }
-  }
-
-  if(isset($form_state['raw_json_results'])){
-
-    $form['raw_json_results_tab'] = array(
-      '#type'  => 'fieldset',
-      '#title' => t('Raw JSON Results'),
-      '#group' => 'group_search_results_tabs',
+  }else{
+    drupal_set_message('Your search returned no results. This may be due to a lack of matching records within EDAN or an invalid parameter. Please check that all of your parameters are set correctly.', 'warning');
+    $form['structured_search_results_tab']['structured_search_results'] = array(
+      '#type' => 'item',
+      '#markup' => '<pre>The Query returned no results.</pre>',
+      '#group' => 'structured_search_results_tab',
       );
+  }
+}
+
+if(isset($form_state['raw_json_results'])){
+
+  $form['raw_json_results_tab'] = array(
+    '#type'  => 'fieldset',
+    '#title' => t('Raw JSON Results'),
+    '#group' => 'group_search_results_tabs',
+    );
 
 
-    if(!empty($form_state['raw_json_results'])) {
-      if(substr_count( $form_state['raw_json_results'], "\n" ) <= 1000){
-        $output = $form_state['raw_json_results'];
-        $link_to_fulltext = '';
-      }else {
-        $lines = explode("\n", $form_state['raw_json_results']);
-        $output = implode("\n", array_slice($lines, 0, 1000));
-        $link_to_fulltext = '<a href="/full_json/' . $form_state['query_reference'] . '"" target="_blank">Click to view full JSON</a>';
-      }
+  if(!empty($form_state['raw_json_results'])) {
+    if(substr_count( $form_state['raw_json_results'], "\n" ) <= 1000){
+      $output = $form_state['raw_json_results'];
+      $link_to_fulltext = '';
+    }else {
+      $lines = explode("\n", $form_state['raw_json_results']);
+      $output = implode("\n", array_slice($lines, 0, 1000));
+      $link_to_fulltext = '<a href="/full_json/' . $form_state['query_reference'] . '"" target="_blank">Click to view full JSON</a>';
+    }
 
-      $copy_js = 'jQuery().ready(function(){
+    $copy_js = 'jQuery().ready(function(){
 
-        jQuery("#edit-copy-to-clipboard").click( function (e) {
-          e.preventDefault();
-          var temp = jQuery("<input>");
-          jQuery("body").append(temp);
-          temp.val(jQuery("#holdtext").text()).select();
-          document.execCommand("copy");
-          temp.remove();
-        });
+      jQuery("#edit-copy-to-clipboard").click( function (e) {
+        e.preventDefault();
+        var temp = jQuery("<input>");
+        jQuery("body").append(temp);
+        temp.val(jQuery("#holdtext").text()).select();
+        document.execCommand("copy");
+        temp.remove();
+      });
 
-      });';
-      drupal_add_js($copy_js, 'inline');
+    });';
+    drupal_add_js($copy_js, 'inline');
 
-      $form['raw_json_results_tab']['copy_to_clipboard'] = array(
-        '#value' => 'Copy to Clipboard',
-        '#type' => 'submit',
-        '#name' => 'copy',
-        '#group' => 'raw_json_results_tab',
-        '#attributes' => array('style' => '-webkit-border-radius: 0px;'),
-        );
+    $form['raw_json_results_tab']['copy_to_clipboard'] = array(
+      '#value' => 'Copy to Clipboard',
+      '#type' => 'submit',
+      '#name' => 'copy',
+      '#group' => 'raw_json_results_tab',
+      '#attributes' => array('style' => '-webkit-border-radius: 0px;'),
+      );
 
       // print out the json output
-      $form['raw_json_results_tab']['raw_json_results'] = array(
-        '#type' => 'item',
-        '#markup' =>
-        '<div id="holdtext" style="display:none;">' . $form_state['raw_json_results'] . '</div>
-        <pre>' . $output . '</pre>' . $link_to_fulltext,
-        '#group' => 'raw_json_results_tab',
-        );
-    }
-  }
-  if(!empty($form_state['structured_search_results']) || !empty($form_state['raw_json_results'])){
-    $form['link_to_top'] = array(
+    $form['raw_json_results_tab']['raw_json_results'] = array(
       '#type' => 'item',
-      '#markup' => '<a href="#">Back to top of page</a>',
+      '#markup' =>
+      '<div id="holdtext" style="display:none;">' . $form_state['raw_json_results'] . '</div>
+      <pre>' . $output . '</pre>' . $link_to_fulltext,
+      '#group' => 'raw_json_results_tab',
       );
   }
+}
+if(!empty($form_state['structured_search_results']) || !empty($form_state['raw_json_results'])){
+  $form['link_to_top'] = array(
+    '#type' => 'item',
+    '#markup' => '<a href="#">Back to top of page</a>',
+    );
+}
 
-  return $form;
+return $form;
 }
 
 function search_console_form_submit($form, &$form_state) {
