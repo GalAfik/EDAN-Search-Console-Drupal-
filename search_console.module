@@ -473,6 +473,10 @@ $form['rows_reference'] = array(
  '#type' => 'item',
  '#markup' => isset($form_state['rows_reference']) ? '<b>Number of Records Found:</b><pre>' . $form_state['rows_reference'] . '</pre>' : '',
  );
+$form['rows_returned_reference'] = array(
+ '#type' => 'item',
+ '#markup' => isset($form_state['rows_returned_reference']) ? '<b>Number of Records Returned:</b><pre>' . $form_state['rows_returned_reference'] . '</pre>' : '',
+ );
 $form['query_reference'] = array(
   '#type' => 'item',
   '#markup' => isset($form_state['query_reference']) ? '<b>Last Valid Query:</b><pre>' . str_replace(' ', '+', urldecode($form_state['query_reference'])) . '</pre>' : '',
@@ -493,14 +497,26 @@ if(isset($form_state['structured_search_results'])){
 
   if(!empty($form_state['structured_search_results'])){
     foreach ($form_state['structured_search_results'] as $key => $record) {
-        // get fields printed out nicely for the structured search resutls
+      // get fields printed out nicely for the structured search resutls
       $fields = '';
       foreach ($record as $field_key => $field_value) {
         if($field_key != 'content') $fields .= '<strong>' . $field_key . ':</strong> ' . $field_value . "\n";
       }
+      // add an image to the result if one exists
+      $image = '';
+      if (isset($record['content']['descriptiveNonRepeating']['online_media']['mediaCount']) && $record['content']['descriptiveNonRepeating']['online_media']['mediaCount'] >= 1) {
+        $image = '<a href="' . $record['content']['descriptiveNonRepeating']['online_media']['media'][0]['content'] . '" target="_blank"><img src="' . $record['content']['descriptiveNonRepeating']['online_media']['media'][0]['thumbnail'] . '" alt="' . $record['content']['descriptiveNonRepeating']['online_media']['media'][0]['idsId'] . '" style="max-width: 25%;display: block;margin: auto;"></a>';
+      }
+
       $form['structured_search_results_tab']['structured_search_results'][$key] = array(
         '#type' => 'item',
-        '#markup' => '<pre>' . $fields . '<a href="/full_record/' . $record['id'] . '" target="_blank">View Full Record</a></pre>',
+        '#markup' => '<pre>' .
+        ( !empty($image) ?
+        '<div style="float:left; max-width: 70%; padding-right: 5%;">' . $fields . '</div>' . $image
+        :
+        '<div style="float:left; max-width: 100%;">' . $fields . '</div>' ) .
+        '<a href="/full_record/' . $record['id'] . '" target="_blank" style="float: left;clear: both;">View Full Record</a>
+        </pre>',
         '#group' => 'structured_search_results_tab',
         );
     }
@@ -822,6 +838,7 @@ function search_console_form_submit($form, &$form_state) {
   $raw_json = json_decode($raw_json_results, true);
   if(isset($raw_json['rows'])){
     $form_state['rows_reference'] = $raw_json['numFound'];
+    $form_state['rows_returned_reference'] = count($raw_json['rows']);
       // reset the results
     $form_state['structured_search_results'] = array();
       // add rows to results
