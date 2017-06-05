@@ -1,5 +1,6 @@
 <?php
 
+require_once('EDANInterface.php');
 
 function search_console_permission() {
   return array(
@@ -162,7 +163,7 @@ function search_console_form($form, &$form_state){
     '#title' => t('start ( Do not exceed the maximum number of records! )'),
     '#type' => 'textfield',
     '#default_value' => 1,
-    '#description' => 'This parameter is used to paginate results from a query. When specified, it indicates the offset (by default, 0) in the complete result set for the queries where the set of returned documents should begin.',
+    '#description' => 'This parameter is used to paginate results from a query. When specified, it indicates the offset (by default, 1) in the complete result set for the queries where the set of returned documents should begin.',
     '#group' => 'search_field_filters_tab',
     );
 
@@ -365,61 +366,30 @@ function search_console_form($form, &$form_state){
     '#attributes' => array('style' => 'background: #008cba; color: #fff;'),
     );
 
+  // this js script handles styling and actions for the clear buttons on all 3 forms
+  $clear_button_js = '
+  jQuery(document).ready(function() {
+    jQuery("#edit-clear, #edit-clear--2, #edit-clear--3").hover(
+    function() {
+      jQuery(this).css("background", "#0079a1")
+    },
+    function() {
+      jQuery(this).css("background", "#008cba")
+    }
+    );
 
-
-
-  $add_js = '
-    jQuery(document).ready(function() {
-      jQuery("#edit-clear").hover(
-      function() {
-        jQuery(this).css("background", "#0079a1")
-      },
-      function() {
-        jQuery(this).css("background", "#008cba")
-      }
-      );
-
-      jQuery("#edit-clear--2").hover(
-      function() {
-        jQuery(this).css("background", "#0079a1")
-      },
-      function() {
-        jQuery(this).css("background", "#008cba")
-      }
-      );
-
-      jQuery("#edit-clear--3").hover(
-      function() {
-        jQuery(this).css("background", "#0079a1")
-      },
-      function() {
-        jQuery(this).css("background", "#008cba")
-      }
-      );
-
-
-    jQuery("#edit-clear").click( function (e) {
+    jQuery("#edit-clear, #edit-clear--2, #edit-clear--3").click( function (e) {
       e.preventDefault();
       jQuery("#search-console-form")[0].reset();
     });
+  });
+  ';
+  drupal_add_js($clear_button_js, 'inline');
 
-    jQuery("#edit-clear--2").click( function (e) {
-      e.preventDefault();
-      jQuery("#search-console-form")[0].reset();
-    });
-
-    jQuery("#edit-clear--3").click( function (e) {
-      e.preventDefault();
-      jQuery("#search-console-form")[0].reset();
-    });
-    });
- ';
-  drupal_add_js($add_js, 'inline');
-
-  // $form['rows_reference'] = array(
-  //  '#type' => 'item',
-  //  '#markup' => isset($form_state['rows_reference']) ? '<b>Number of Rows Returned:</b><pre>' . $form_state['rows_reference'] . '</pre>' : '',
-  //  );
+  $form['rows_reference'] = array(
+   '#type' => 'item',
+   '#markup' => isset($form_state['rows_reference']) ? '<b>Number of Records Found:</b><pre>' . $form_state['rows_reference'] . '</pre>' : '',
+   );
   $form['query_reference'] = array(
     '#type' => 'item',
     '#markup' => isset($form_state['query_reference']) ? '<b>Last Valid Query:</b><pre>' . str_replace(' ', '+', urldecode($form_state['query_reference'])) . '</pre>' : '',
@@ -452,6 +422,7 @@ function search_console_form($form, &$form_state){
           );
       }
     }else{
+      drupal_set_message('Your search returned no results. This may be due to a lack of matching records within EDAN or an invalid parameter. Please check that all of your parameters are set correctly.', 'warning');
       $form['structured_search_results_tab']['structured_search_results'] = array(
         '#type' => 'item',
         '#markup' => '<pre>The Query returned no results.</pre>',
@@ -513,8 +484,8 @@ function search_console_form_submit($form, &$form_state) {
     // add optional parameters if they are set
     $query_parameters = array();
     $query_parameters['q'] = !empty($form_state['values']['q']) ? $form_state['values']['q'] : '';
-    $query_parameters['rows'] = !empty($form_state['values']['rows']) ? $form_state['values']['rows'] : '';
-    $query_parameters['start'] = !empty($form_state['values']['start']) ? $form_state['values']['start'] : '';
+    $query_parameters['rows'] = !empty($form_state['values']['rows']) ? $form_state['values']['rows'] : '0';
+    $query_parameters['start'] = !empty($form_state['values']['start']) ? $form_state['values']['start'] : '1';
     $query_parameters['fqs'] = array();
 
     // build out the fqs from applicable, set facets and set record type according to dropdown selection
@@ -718,155 +689,47 @@ function search_console_form_submit($form, &$form_state) {
   // this block submits the query to EDAN and cleans up/prints out the results for the user
   if(!empty($query)){
 
+    // error handling section
+    $query_parameters = array();
+    $parameter_array = explode('&', $query);
+    foreach ($parameter_array as $value) {
+     list($k, $v) = explode('=', $value);
+     $query_parameters[$k] = $v;
+   }
+    // q is empty
+   if (!isset($query_parameters['q']) || empty($query_parameters['q'])) {
+    drupal_set_message('You have not entered a "q" value! Your EDAN search will return a list of generic records.', 'warning');
+  }
+    // rows is invalid
+  if (!is_numeric($query_parameters['rows']) || $query_parameters['rows'] <= 0) {
+    drupal_set_message('The "rows" value you have entered seems to be invalid (' . (!is_null($query_parameters['rows']) ? $query_parameters['rows'] : 'EMPTY VALUE') . '). Make sure that "rows" is a positive integer between 0 and 100.', 'warning');
+  }
+    // start is invalid
+  if (!is_numeric($query_parameters['start']) || $query_parameters['start'] < 0) {
+    drupal_set_message('The "start" value you have entered seems to be invalid (' . (!is_null($query_parameters['start']) ? $query_parameters['start'] : 'EMPTY VALUE') . '). Make sure that "start" is a positive integer above 0.', 'warning');
+  }
+
     // set the raw json results
-    $raw_json_results = _get_search_results_from_edan(isset($query) ? $query : '');
-    $form_state['raw_json_results'] = $raw_json_results;
+  $raw_json_results = _get_search_results_from_edan(isset($query) ? $query : '');
+  $form_state['raw_json_results'] = $raw_json_results;
 
     // set the structured search results
-    $raw_json = json_decode($raw_json_results, true);
-    if(isset($raw_json['rows'])){
-      $form_state['rows_reference'] = $raw_json['numFound'];
+  $raw_json = json_decode($raw_json_results, true);
+  if(isset($raw_json['rows'])){
+    $form_state['rows_reference'] = $raw_json['numFound'];
       // reset the results
-      $form_state['structured_search_results'] = array();
+    $form_state['structured_search_results'] = array();
       // add rows to results
-      foreach ($raw_json['rows'] as $key => $record) {
-        $form_state['structured_search_results'][] = $record;
-      }
-    }else{
-      drupal_set_message('Something went wrong. Please contact an Administrator.', 'error');
+    foreach ($raw_json['rows'] as $key => $record) {
+      $form_state['structured_search_results'][] = $record;
     }
   }else{
-    drupal_set_message('The search parameters are invalid. Please adjust your search and try again or contact an Administrator.', 'error');
+    drupal_set_message('Something went wrong. Please contact an Administrator.', 'error');
   }
-
-  // rebuild the form with new inputs and results set
-  $form_state['rebuild'] = TRUE;
+}else{
+  drupal_set_message('The search parameters are invalid. Please adjust your search and try again or contact an Administrator.', 'error');
 }
 
-
-
-
-
-
-
-
-
-
-// Class
-class EDANInterface {
-  // this class actually generates the call to the API
-  private $server;
-  private $app_id;
-  private $edan_key;
-  /**
-   * int
-   * 0 for unsigned/trusted/T1 requests;
-   * 1 for signed/T2 requests;
-   * 2 for password based (unused)
-   */
-  private $auth_type = 1;
-  /**
-   * Bool tracks whether the request was successful based on response header (200 = success)
-   */
-  private $valid_request = FALSE;
-  public $result_format = 'json';
-  private $results;
-  /**
-   * Constructor
-   */
-  public function __construct($server, $app_id, $edan_key, $auth_type = 1) {
-    $this->server = $server;
-    $this->app_id = $app_id;
-    $this->edan_key = $edan_key;
-    // Normalize, but don't cast
-    if ($auth_type == 0 || $auth_type == '0') {
-      $this->auth_type = 0;
-    }
-    $this->result_format = 'json';
-    $this->valid_request = FALSE;
-  }
-  /**
-   * Creates the header for the request to EDAN. Takes $uri, prepends a nonce, and appends
-   * the date and appID key. Hashes as sha1() and base64_encode() the result.
-   * @param uri The URI (string) to be hashed and encoded.
-   * @returns Array containing all the elements and signed header value
-   */
-  private function encodeHeader($uri) {
-    $ipnonce = $this->get_nonce(); // Alternatively you could do: get_nonce(8, '-'.get_nonce(8));
-    $date = date('Y-m-d H:i:s');
-    $return = array(
-      'X-AppId: ' . $this->app_id,
-      'X-RequestDate: ' . $date,
-      'X-AppVersion: ' . 'EDANInterface-1.01'
-      );
-    // For signed/T2 requests
-    if ($this->auth_type === 1) {
-      $auth = "{$ipnonce}\n{$uri}\n{$date}\n{$this->edan_key}";
-      $content = base64_encode(sha1($auth));
-      $return[] = 'X-Nonce: ' . $ipnonce;
-      $return[] = 'X-AuthContent: ' . $content;
-    }
-    return $return;
-  }
-  /**
-   * Perform a curl request
-   * @param args An associative array that can contain {q,fq,rows,start}
-   * @param service The service name you are curling {metadataService,tagService,collectService}
-   * @param POST boolean, defaults to false; on true $uri sent CURLOPT_POSTFIELDS
-   * @param info reference, if passed will be set with the output of curl_getinfo
-   *
-   * @return string
-   * JSON or XML response from EDAN as a string.
-   */
-  public function sendRequest($uri, $service, $POST = FALSE, &$info) {
-    // Hash the request for tracking/profiling/caching
-    $hash = md5($uri . $service . $POST);
-    $ch = curl_init();
-    if ($POST === TRUE) {
-      curl_setopt($ch, CURLOPT_URL, $this->server . $service);
-      curl_setopt($ch, CURLOPT_POST, 1);
-      curl_setopt($ch, CURLOPT_POSTFIELDS, "encodedRequest=" . base64_encode($uri));
-    } else {
-      curl_setopt($ch, CURLOPT_URL, $this->server . $service . '?' . $uri);
-    }
-    curl_setopt($ch, CURLOPT_HEADER, 0);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, $this->encodeHeader($uri));
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-    curl_setopt($ch, CURLINFO_HEADER_OUT, 1);
-    $response = curl_exec($ch);
-    $info = curl_getinfo($ch);
-    if ($info['http_code'] == 200) {
-      $this->valid_request = TRUE;
-    } else {
-      $this->valid_request = FALSE;
-    }
-    curl_close($ch);
-    $GLOBALS['edan_hashes'][$hash] = $response;
-    return $response;
-  }
-  /**
-   * Generates a nonce.
-   *
-   * @param int $length
-   *   (optional) Int representing the length of the random string.
-   * @param string $prefix
-   *   (optional) String containing a prefix to be prepended to the random string.
-   *
-   * @return string
-   *   Returns a string containing a randomized set of letters and numbers $length long
-   *   with $prefix prepended.
-   */
-  private function get_nonce($length = 15, $prefix = '') {
-    $password = "";
-    $possible = "0123456789abcdefghijklmnopqrstuvwxyz";
-    $i = 0;
-    while ($i < $length) {
-      $char = substr($possible, mt_rand(0, strlen($possible)-1), 1);
-      if (!strstr($password, $char)) {
-        $password .= $char;
-        $i++;
-      }
-    }
-    return $prefix.$password;
-  }
+  // rebuild the form with new inputs and results set
+$form_state['rebuild'] = TRUE;
 }
