@@ -114,7 +114,7 @@ function _get_search_results_from_edan($query = '') {
   return $results_raw;
 }
 
-function _get_facets_from_edan() {
+function _get_facets_from_edan($query = '') {
 
   $config = require('config.php');
   $host = variable_get('search_console_host', $config->host);
@@ -134,11 +134,54 @@ function _get_facets_from_edan() {
   // Request
   $service = 'metadata/v1.1/metadata/getFacets.htm'; // API Endpoint
   // Response
-  $results_raw = $edan->sendRequest('', $service, FALSE, $info = '');
+  $results_raw = $edan->sendRequest($query, $service, FALSE, $info = '');
   return $results_raw;
 }
 
-function search_console_form($form, &$form_state){
+function _get_object_types() {
+  return array(
+    '' => 'Any',
+    'edanmdm' => 'edanmdm',
+    'objectgroup' => 'ogmt',
+    );
+}
+
+function _get_facet_names( $object_type ) {
+  switch ($object_type) {
+
+    case 'edanmdm':
+    return array(
+      'online_media_type' => 'Online Media Type',
+      'object_type' => 'Object Type',
+      'topic' => 'Topic',
+      'p.edanmdm.indexedstructured.name' => 'Name',
+      'culture' => 'Culture',
+      'language' => 'Language',
+      'place' => 'Place',
+      'date' => 'Date',
+      'p.edanmdm.descriptivenonrepeating.data_source' => 'Data Source',
+      );
+    break;
+
+    case 'objectgroup':
+    return array(
+      );
+    break;
+
+    default:
+    $object_types = _get_object_types();
+    // get rid of '' in object types so this doesn't call itself
+    array_shift($object_types);
+    $facet_array = array();
+    foreach ($object_types as $key => $value) {
+      $facet_array = array_merge($facet_array, _get_facet_names($key));
+    }
+    return $facet_array;
+    break;
+  }
+}
+
+function search_console_form($form, &$form_state) {
 
   //hide parts of description box
   $js = 'jQuery().ready(function(){
@@ -146,7 +189,7 @@ function search_console_form($form, &$form_state){
   });';
   drupal_add_js($js, 'inline');
 
-  if(user_access('administer search console settings')){
+  if (user_access('administer search console settings')) {
     // hyperlink to the admin page for changing authentication settings
     $form['link_to_settings'] = array(
       '#type' => 'item',
@@ -187,103 +230,114 @@ function search_console_form($form, &$form_state){
     '#group' => 'search_field_filters_tab',
     );
 
+  $object_types = _get_object_types();
+
   $form['search_field_filters_tab']['record_type'] = array(
     '#type' => 'select',
     '#title' => t('Record Type'),
     '#description' => 'This selection will limit the results to only show records of the selected type.',
-    '#options' => array(
-      '' => t('Any'),
-      'edanmdm' => t('edanmdm'),
-      'objectgroup' => t('ogmt'),
-      ),
+    '#options' => $object_types,
     '#group' => 'search_field_filters_tab',
+    '#ajax' => array(
+      'wrapper' => 'facet-wrapper',
+      'callback' => 'search_console_ajax_callback',
+      ),
     );
+
+  // Get the value of the 'record_type' field.
   $form['search_field_filters_tab']['facets'] = array(
     '#type' => 'fieldset',
     '#title' => 'Facets',
-    '#states' => array(
-      'visible' => array(
-        ':input[name="record_type"]' => array('value' => 'edanmdm'),
+    '#prefix' => '<div id="facet-wrapper">',
+    '#suffix' => '</div>',
+    );
+
+  // get list of facet names based on type
+  $facets = array();
+  foreach ($object_types as $key => $value) {
+    $facets[ $key ] = _get_facet_names( $key );
+  }
+
+  // logic for building out facet fields
+  if(empty($form_state['facet_num_items']) && empty($record)) {
+    $form_state['facet_num_items'] = 0;
+  }
+  $form_state['facet_num_items'] = !empty($form_state['facet_num_items']) ? $form_state['facet_num_items'] : 0;
+
+
+  // handling for autocomplete tooltip on facet input fields
+  drupal_add_library('system', 'ui.autocomplete');
+  $object_type = isset($form_state['values']['record_type']) ? $form_state['values']['record_type'] : '';
+  // build out all of the facet forms
+  for ($i = 1; $i <= $form_state['facet_num_items']; $i++) {
+    $form['search_field_filters_tab']['facets']['facet_name_' . $i] = array(
+      '#type' => 'select',
+      '#title' => t('Facet #' . $i),
+      '#options' => _get_facet_names($object_type),
+      '#ajax' => array(
+        'wrapper' => 'facet-wrapper',
+        'callback' => 'search_console_ajax_callback',
         ),
-      ),
+      );
+    $form['search_field_filters_tab']['facets']['facet_value_' . $i] = array(
+      '#type' => 'textfield',
+      '#group' => 'search_field_filters_tab',
+      );
+
+    $form_state['facet_name'] = isset($form_state['values']['facet_name_' . $i]) ? $form_state['values']['facet_name_' . $i] : '';
+
+    // following this, autocomplete_options contains an array of facet names that each contains an array of possible facet values for that field
+    $autocomplete_options = array();
+    $results = json_decode(_get_facets_from_edan(), TRUE);
+    foreach ($results['facets'] as $facet_name => $facet_values) {
+      foreach ($facet_values as $facet_value) {
+        $autocomplete_options[ $facet_name ][] = $facet_value[0];
+      }
+    }
+
+    // add tooltip script for each field that has existing facets
+    // if (array_key_exists($facet_name, $autocomplete_options)) {
+    //   $autocomplete_js = '
+    //   jQuery(document).ready(function() {
+    //     var tags =' . json_encode($autocomplete_options[$facet_name]) . ';
+    //     jQuery("[id^=edit-facet-value-' . $i . ']").autocomplete({
+    //       source: tags,
+    //       minLength: 0
+    //     });
+    //     jQuery("[id^=edit-facet-value-' . $i . ']").click(function() {
+    //       jQuery("[id^=edit-facet-value-' . $i . ']").autocomplete( "search", "" );
+    //     });
+    //   });';
+    //   drupal_add_js($autocomplete_js, 'inline');
+    // }
+  }
+
+  $form['search_field_filters_tab']['facets']['add_facet_item'] = array(
+    '#name' => 'add_facet_item',
+    '#type' => 'submit',
+    '#value' => t('Add a Facet'),
+    '#submit' => array('_facet_add_item'),
+    '#attributes' => array('style' => 'font-size: 0.8rem; padding: 6px 8px; border-radius: 4px; margin-bottom: 0rem;'),
     '#group' => 'search_field_filters_tab',
     );
 
-  $form['search_field_filters_tab']['facets']['edanmdm_online_media_type'] = array(
-    '#title' => t('online_media_type'),
-    '#type' => 'textfield',
-    '#group' => 'search_field_filters_tab',
-    );
-  $form['search_field_filters_tab']['facets']['edanmdm_object_type'] = array(
-    '#title' => t('object_type'),
-    '#type' => 'textfield',
-    '#group' => 'search_field_filters_tab',
-    );
-  $form['search_field_filters_tab']['facets']['edanmdm_topic'] = array(
-    '#title' => t('topic'),
-    '#type' => 'textfield',
-    '#group' => 'search_field_filters_tab',
-    );
-  $form['search_field_filters_tab']['facets']['edanmdm_name'] = array(
-    '#title' => t('name'),
-    '#type' => 'textfield',
-    '#group' => 'search_field_filters_tab',
-    );
-  $form['search_field_filters_tab']['facets']['edanmdm_culture'] = array(
-    '#title' => t('culture'),
-    '#type' => 'textfield',
-    '#group' => 'search_field_filters_tab',
-    );
-  $form['search_field_filters_tab']['facets']['edanmdm_language'] = array(
-    '#title' => t('language'),
-    '#type' => 'textfield',
-    '#group' => 'search_field_filters_tab',
-    );
-  $form['search_field_filters_tab']['facets']['edanmdm_place'] = array(
-    '#title' => t('place'),
-    '#type' => 'textfield',
-    '#group' => 'search_field_filters_tab',
-    );
-  $form['search_field_filters_tab']['facets']['edanmdm_date'] = array(
-    '#title' => t('date'),
-    '#type' => 'textfield',
-    '#group' => 'search_field_filters_tab',
-    );
-  $form['search_field_filters_tab']['facets']['edanmdm_data_source'] = array(
-    '#title' => t('data_source'),
-    '#type' => 'textfield',
-    '#group' => 'search_field_filters_tab',
-    );
-  $form['search_field_filters_tab']['facets']['edanmdm_tax_kingdom'] = array(
-    '#title' => t('tax_kingdom'),
-    '#type' => 'textfield',
-    '#group' => 'search_field_filters_tab',
-    );
-  $form['search_field_filters_tab']['facets']['edanmdm_tax_phylum'] = array(
-    '#title' => t('tax_phylum'),
-    '#type' => 'textfield',
-    '#group' => 'search_field_filters_tab',
-    );
-  $form['search_field_filters_tab']['facets']['edanmdm_tax_class'] = array(
-    '#title' => t('tax_class'),
-    '#type' => 'textfield',
-    '#group' => 'search_field_filters_tab',
-    );
-  $form['search_field_filters_tab']['facets']['edanmdm_tax_order'] = array(
-    '#title' => t('tax_order'),
-    '#type' => 'textfield',
-    '#group' => 'search_field_filters_tab',
-    );
-  $form['search_field_filters_tab']['facets']['edanmdm_tax_family'] = array(
-    '#title' => t('tax_family'),
-    '#type' => 'textfield',
-    '#group' => 'search_field_filters_tab',
-    );
-  $form['search_field_filters_tab']['facets']['edanmdm_scientific_name'] = array(
-    '#title' => t('scientific name'),
-    '#type' => 'textfield',
-    '#group' => 'search_field_filters_tab',
-    );
+  // If we have more than one item, this button allows removal of the last item.
+  if ($form_state['facet_num_items'] > 1) {
+    $form['search_field_filters_tab']['facets']['remove_facet_item'] = array(
+      '#name' => 'remove_facet_item',
+      '#type' => 'submit',
+      '#value' => t('Remove Latest Facet'),
+      '#submit' => array('_facet_remove_item'),
+      '#limit_validation_errors' => array(),
+      '#attributes' => array('style' => 'font-size: 0.8rem; padding: 6px 8px; border-radius: 4px; margin-bottom: 0rem;'),
+      '#group' => 'search_field_filters_tab',
+      );
+  }
+
+  // when facet name is selected, get list of facet values based on name
+
+  // apply autocomplete to form based on facet values
+
   // submit button
   $form['search_field_filters_tab']['button_container'] = array(
     '#type' => 'item',
@@ -304,300 +358,273 @@ function search_console_form($form, &$form_state){
     '#attributes' => array('style' => 'background: #008cba; color: #fff;'),
     );
 
-  // handling for autocomplete tooltip on facet input fields
-  drupal_add_library('system', 'ui.autocomplete');
-  // following this, autocomplete_options contains an array of facet names that each contains an array of possible facet values for that field
-  $autocomplete_options = array();
-  $results = json_decode(_get_facets_from_edan(), TRUE);
-  foreach ($results['facets'] as $facet_name => $facet_values) {
-    foreach ($facet_values as $facet_value) {
-      $autocomplete_options[ $facet_name ][] = $facet_value[0];
-    }
-  }
 
-  $list_of_facet_fields = array(
-    'online_media_type',
-    'object_type',
-    'topic',
-    'name',
-    'culture',
-    'language',
-    'place',
-    'date',
-    'data_source',
-    'tax_kingdom',
-    'tax_phylum',
-    'tax_class',
-    'tax_order',
-    'tax_family',
-    'scientific name',
+
+
+
+
+  $form['query_tab'] = array(
+    '#type'  => 'fieldset',
+    '#title' => t('Query'),
+    '#group' => 'group_tabs',
+    );
+  $form['query_tab']['query'] = array(
+    '#title' => t('Raw Decoded Query'),
+    '#type' => 'text_format',
+    '#description' => 'You may enter your search filters as a raw query into this field in order to narrow down your search results.',
+    '#group' => 'query_tab',
+    );
+  $form['query_tab']['encoded_query'] = array(
+    '#title' => t('Encoded Query'),
+    '#type' => 'item',
+    '#markup' => '<pre>' . (isset($form_state['encoded_query']) ? $form_state['encoded_query'] : '') . '</pre>',
+    '#description' => 'This is a URL-safe encoded query to use in your application.',
+    '#group' => 'query_tab',
+    );
+  // submit button
+  $form['query_tab']['button_container'] = array(
+    '#type' => 'item',
+    '#attributes' => array('class' => array('container-inline')),
+    );
+  $form['query_tab']['button_container']['submit'] = array(
+    '#value' => 'Submit',
+    '#type' => 'submit',
+    '#name' => 'query_submit',
+    '#group' => 'query_tab',
+    );
+  $form['query_tab']['button_container']['clear'] = array(
+    '#value' => 'Clear',
+    '#type' => 'submit',
+    '#name' => 'query_clear',
+    '#group' => 'query_tab',
+    '#attributes' => array('style' => 'background: #008cba; color: #fff;'),
     );
 
-  // add tooltip script for each field that has existing facets
-  foreach ($list_of_facet_fields as $facet_field_name) {
-    if (array_key_exists($facet_field_name, $autocomplete_options)) {
-      $autocomplete_js = '
-      jQuery(document).ready(function() {
-        var tags =' . json_encode($autocomplete_options[$facet_field_name]) . ';
-        jQuery("#edit-edanmdm-' . str_replace('_', '-', $facet_field_name) . '").autocomplete({
-          source: tags,
-          minLength: 0
-        });
-        jQuery("#edit-edanmdm-' . str_replace('_', '-', $facet_field_name) . '").click(function() {
-          jQuery("#edit-edanmdm-' . str_replace('_', '-', $facet_field_name) . '").autocomplete( "search", "" );
-       });
-     });';
-     drupal_add_js($autocomplete_js, 'inline');
-   }
- }
 
 
- $form['query_tab'] = array(
-  '#type'  => 'fieldset',
-  '#title' => t('Query'),
-  '#group' => 'group_tabs',
-  );
- $form['query_tab']['query'] = array(
-  '#title' => t('Raw Decoded Query'),
-  '#type' => 'text_format',
-  '#description' => 'You may enter your search filters as a raw query into this field in order to narrow down your search results.',
-  '#group' => 'query_tab',
-  );
- $form['query_tab']['encoded_query'] = array(
-  '#title' => t('Encoded Query'),
-  '#type' => 'item',
-  '#markup' => '<pre>' . (isset($form_state['encoded_query']) ? $form_state['encoded_query'] : '') . '</pre>',
-  '#description' => 'This is a URL-safe encoded query to use in your application.',
-  '#group' => 'query_tab',
-  );
+
+  $form['collections_url_tab'] = array(
+    '#type'  => 'fieldset',
+    '#title' => t('URL'),
+    '#group' => 'group_tabs',
+    );
+  $form['collections_url_tab']['collections_url'] = array(
+    '#title' => t('Collections URL'),
+    '#type' => 'textfield',
+    '#description' => 'Paste a <b><a href="http://collections.si.edu" target="_blank">collection.si.edu</a></b> URL into the field above to replicate the search on this page. You may modify the search using the Search Filters above or by adding requirements to the Raw Query below.',
+    '#group' => 'collections_url_tab',
+    '#maxlength' => 100000,
+    );
+  $form['collections_url_tab']['collections_rows'] = array(
+    '#title' => t('rows ( 100 max )'),
+    '#type' => 'textfield',
+    '#default_value' => 10,
+    '#description' => 'All Collections.si.edu searches default to <b>10 rows</b>.',
+    '#group' => 'collections_url_tab',
+    );
   // submit button
- $form['query_tab']['button_container'] = array(
-  '#type' => 'item',
-  '#attributes' => array('class' => array('container-inline')),
-  );
- $form['query_tab']['button_container']['submit'] = array(
-  '#value' => 'Submit',
-  '#type' => 'submit',
-  '#name' => 'query_submit',
-  '#group' => 'query_tab',
-  );
- $form['query_tab']['button_container']['clear'] = array(
-  '#value' => 'Clear',
-  '#type' => 'submit',
-  '#name' => 'query_clear',
-  '#group' => 'query_tab',
-  '#attributes' => array('style' => 'background: #008cba; color: #fff;'),
-  );
-
-
-
-
-
- $form['collections_url_tab'] = array(
-  '#type'  => 'fieldset',
-  '#title' => t('URL'),
-  '#group' => 'group_tabs',
-  );
- $form['collections_url_tab']['collections_url'] = array(
-  '#title' => t('Collections URL'),
-  '#type' => 'textfield',
-  '#description' => 'Paste a <b><a href="http://collections.si.edu" target="_blank">collection.si.edu</a></b> URL into the field above to replicate the search on this page. You may modify the search using the Search Filters above or by adding requirements to the Raw Query below.',
-  '#group' => 'collections_url_tab',
-  '#maxlength' => 100000,
-  );
- $form['collections_url_tab']['collections_rows'] = array(
-  '#title' => t('rows ( 100 max )'),
-  '#type' => 'textfield',
-  '#default_value' => 10,
-  '#description' => 'All Collections.si.edu searches default to <b>10 rows</b>.',
-  '#group' => 'collections_url_tab',
-  );
-  // submit button
- $form['collections_url_tab']['button_container'] = array(
-  '#type' => 'item',
-  '#attributes' => array('class' => array('container-inline')),
-  );
- $form['collections_url_tab']['button_container']['submit'] = array(
-  '#value' => 'Submit',
-  '#type' => 'submit',
-  '#name' => 'collections_url_submit',
-  '#prefix' => '<br>',
-  '#group' => 'collections_url_tab',
-  );
- $form['collections_url_tab']['button_container']['clear'] = array(
-  '#value' => 'Clear',
-  '#type' => 'submit',
-  '#name' => 'collections_clear',
-  '#group' => 'collections_url_tab',
-  '#attributes' => array('style' => 'background: #008cba; color: #fff;'),
-  );
+  $form['collections_url_tab']['button_container'] = array(
+    '#type' => 'item',
+    '#attributes' => array('class' => array('container-inline')),
+    );
+  $form['collections_url_tab']['button_container']['submit'] = array(
+    '#value' => 'Submit',
+    '#type' => 'submit',
+    '#name' => 'collections_url_submit',
+    '#prefix' => '<br>',
+    '#group' => 'collections_url_tab',
+    );
+  $form['collections_url_tab']['button_container']['clear'] = array(
+    '#value' => 'Clear',
+    '#type' => 'submit',
+    '#name' => 'collections_clear',
+    '#group' => 'collections_url_tab',
+    '#attributes' => array('style' => 'background: #008cba; color: #fff;'),
+    );
 
   // this js script handles styling and actions for the clear buttons on all 3 forms
- $clear_button_js = '
- function clear_form_elements(ele) {
-  jQuery(ele).find(":input").each(function() {
-    switch(this.type) {
-      case "password":
-      case "select-multiple":
-      case "select-one":
-      case "text":
-      case "textarea":
-      if (jQuery(this).attr("id") == "edit-rows") {
-        jQuery(this).val("10");
-      } else if (jQuery(this).attr("id") == "edit-start") {
-        jQuery(this).val("1");
-      } else {
-        jQuery(this).val("");
+  $clear_button_js = '
+  function clear_form_elements(ele) {
+    jQuery(ele).find(":input").each(function() {
+      switch(this.type) {
+        case "password":
+        case "select-multiple":
+        case "select-one":
+        case "text":
+        case "textarea":
+        if (jQuery(this).attr("id") == "edit-rows") {
+          jQuery(this).val("10");
+        } else if (jQuery(this).attr("id") == "edit-start") {
+          jQuery(this).val("1");
+        } else {
+          jQuery(this).val("");
+        }
+        break;
+        case "checkbox":
+        case "radio":
+        this.checked = false;
       }
-      break;
-      case "checkbox":
-      case "radio":
-      this.checked = false;
-    }
-  });
-}
-jQuery(document).ready(function() {
-
-  jQuery("#edit-clear, #edit-clear--2, #edit-clear--3").hover(
-  function() {
-    jQuery(this).css("background", "#0079a1")
-  },
-  function() {
-    jQuery(this).css("background", "#008cba")
+    });
   }
-  );
+  jQuery(document).ready(function() {
 
-  jQuery("#edit-clear, #edit-clear--2, #edit-clear--3").click( function (e) {
-    e.preventDefault();
-    clear_form_elements(jQuery("#search-console-form"));
-  });
-});
-';
-drupal_add_js($clear_button_js, 'inline');
-
-$form['rows_reference'] = array(
- '#type' => 'item',
- '#markup' => isset($form_state['rows_reference']) ? '<b>Number of Records Found:</b><pre>' . $form_state['rows_reference'] . '</pre>' : '',
- );
-$form['rows_returned_reference'] = array(
- '#type' => 'item',
- '#markup' => isset($form_state['rows_returned_reference']) ? '<b>Number of Records Returned:</b><pre>' . $form_state['rows_returned_reference'] . '</pre>' : '',
- );
-$form['query_reference'] = array(
-  '#type' => 'item',
-  '#markup' => isset($form_state['query_reference']) ? '<b>Last Valid Query:</b><pre>' . str_replace(' ', '+', urldecode($form_state['query_reference'])) . '</pre>' : '',
-  );
-
-  // results display area
-$form['group_search_results_tabs'] = array(
-  '#type'     => 'horizontal_tabs',
-  '#attached' => array('library' => array(array('field_group', 'horizontal-tabs'))),
-  );
-
-if(isset($form_state['structured_search_results'])){
-  $form['structured_search_results_tab'] = array(
-    '#type'  => 'fieldset',
-    '#title' => t('Structured Results'),
-    '#group' => 'group_search_results_tabs',
+    jQuery("#edit-clear, #edit-clear--2, #edit-clear--3").hover(
+    function() {
+      jQuery(this).css("background", "#0079a1")
+    },
+    function() {
+      jQuery(this).css("background", "#008cba")
+    }
     );
 
-  if(!empty($form_state['structured_search_results'])){
-    foreach ($form_state['structured_search_results'] as $key => $record) {
-      // get fields printed out nicely for the structured search resutls
-      $fields = '';
-      foreach ($record as $field_key => $field_value) {
-        if($field_key != 'content') $fields .= '<strong>' . $field_key . ':</strong> ' . $field_value . "\n";
-      }
-      // add an image to the result if one exists
-      $image = '';
-      if (isset($record['content']['descriptiveNonRepeating']['online_media']['mediaCount']) && $record['content']['descriptiveNonRepeating']['online_media']['mediaCount'] >= 1) {
-        $image = '<a href="' . $record['content']['descriptiveNonRepeating']['online_media']['media'][0]['content'] . '" target="_blank"><img src="' . $record['content']['descriptiveNonRepeating']['online_media']['media'][0]['thumbnail'] . '" style="max-width: 25%;display: block;margin: auto;"></a>';
-      }
+    jQuery("#edit-clear, #edit-clear--2, #edit-clear--3").click( function (e) {
+      e.preventDefault();
+      clear_form_elements(jQuery("#search-console-form"));
+    });
+  });
+  ';
+  drupal_add_js($clear_button_js, 'inline');
 
-      $form['structured_search_results_tab']['structured_search_results'][$key] = array(
-        '#type' => 'item',
-        '#markup' => '<pre>' .
-        ( !empty($image) ?
-        '<div style="float:left; max-width: 70%; padding-right: 5%;">' . $fields . '</div>' . $image
-        :
-        '<div style="float:left; max-width: 100%;">' . $fields . '</div>' ) .
-        '<a href="/full_record/' . $record['id'] . '" target="_blank" style="float: left;clear: both;">View Full Record</a>
+  $form['rows_reference'] = array(
+   '#type' => 'item',
+   '#markup' => isset($form_state['rows_reference']) ? '<b>Number of Records Found:</b><pre>' . $form_state['rows_reference'] . '</pre>' : '',
+   );
+  $form['rows_returned_reference'] = array(
+   '#type' => 'item',
+   '#markup' => isset($form_state['rows_returned_reference']) ? '<b>Number of Records Returned:</b><pre>' . $form_state['rows_returned_reference'] . '</pre>' : '',
+   );
+  $form['query_reference'] = array(
+    '#type' => 'item',
+    '#markup' => isset($form_state['query_reference']) ? '<b>Last Valid Query:</b><pre>' . str_replace(' ', '+', urldecode($form_state['query_reference'])) . '</pre>' : '',
+    );
+
+  // results display area
+  $form['group_search_results_tabs'] = array(
+    '#type'     => 'horizontal_tabs',
+    '#attached' => array('library' => array(array('field_group', 'horizontal-tabs'))),
+    );
+
+  if(isset($form_state['structured_search_results'])){
+    $form['structured_search_results_tab'] = array(
+      '#type'  => 'fieldset',
+      '#title' => t('Structured Results'),
+      '#group' => 'group_search_results_tabs',
+      );
+
+    if(!empty($form_state['structured_search_results'])){
+      foreach ($form_state['structured_search_results'] as $key => $record) {
+      // get fields printed out nicely for the structured search resutls
+        $fields = '';
+        foreach ($record as $field_key => $field_value) {
+          if($field_key != 'content') $fields .= '<strong>' . $field_key . ':</strong> ' . $field_value . "\n";
+        }
+      // add an image to the result if one exists
+        $image = '';
+        if (isset($record['content']['descriptiveNonRepeating']['online_media']['mediaCount']) && $record['content']['descriptiveNonRepeating']['online_media']['mediaCount'] >= 1) {
+          $image = '<a href="' . $record['content']['descriptiveNonRepeating']['online_media']['media'][0]['content'] . '" target="_blank"><img src="' . $record['content']['descriptiveNonRepeating']['online_media']['media'][0]['thumbnail'] . '" style="max-width: 25%;display: block;margin: auto;"></a>';
+        }
+
+        $form['structured_search_results_tab']['structured_search_results'][$key] = array(
+          '#type' => 'item',
+          '#markup' => '<pre>' .
+          ( !empty($image) ?
+            '<div style="float:left; max-width: 70%; padding-right: 5%;">' . $fields . '</div>' . $image
+            :
+            '<div style="float:left; max-width: 100%;">' . $fields . '</div>' ) .
+          '<a href="/full_record/' . $record['id'] . '" target="_blank" style="float: left;clear: both;">View Full Record</a>
         </pre>',
         '#group' => 'structured_search_results_tab',
         );
+      }
+    }else{
+      drupal_set_message('Your search returned no results. This may be due to a lack of matching records within EDAN or an invalid parameter. Please check that all of your parameters are set correctly.', 'warning');
+      $form['structured_search_results_tab']['structured_search_results'] = array(
+        '#type' => 'item',
+        '#markup' => '<pre>The Query returned no results.</pre>',
+        '#group' => 'structured_search_results_tab',
+        );
     }
-  }else{
-    drupal_set_message('Your search returned no results. This may be due to a lack of matching records within EDAN or an invalid parameter. Please check that all of your parameters are set correctly.', 'warning');
-    $form['structured_search_results_tab']['structured_search_results'] = array(
-      '#type' => 'item',
-      '#markup' => '<pre>The Query returned no results.</pre>',
-      '#group' => 'structured_search_results_tab',
-      );
   }
-}
 
-if(isset($form_state['raw_json_results'])){
+  if(isset($form_state['raw_json_results'])){
 
-  $form['raw_json_results_tab'] = array(
-    '#type'  => 'fieldset',
-    '#title' => t('Raw JSON Results'),
-    '#group' => 'group_search_results_tabs',
-    );
-
-
-  if(!empty($form_state['raw_json_results'])) {
-    if(substr_count( $form_state['raw_json_results'], "\n" ) <= 1000){
-      $output = $form_state['raw_json_results'];
-      $link_to_fulltext = '';
-    }else {
-      $lines = explode("\n", $form_state['raw_json_results']);
-      $output = implode("\n", array_slice($lines, 0, 1000));
-      $link_to_fulltext = '<a href="/full_json/' . $form_state['query_reference'] . '"" target="_blank">Click to view full JSON</a>';
-    }
-
-    $copy_js = 'jQuery().ready(function(){
-
-      jQuery("#edit-copy-to-clipboard").click( function (e) {
-        e.preventDefault();
-        var temp = jQuery("<input>");
-        jQuery("body").append(temp);
-        temp.val(jQuery("#holdtext").text()).select();
-        document.execCommand("copy");
-        temp.remove();
-      });
-
-    });';
-    drupal_add_js($copy_js, 'inline');
-
-    $form['raw_json_results_tab']['copy_to_clipboard'] = array(
-      '#value' => 'Copy to Clipboard',
-      '#type' => 'submit',
-      '#name' => 'copy',
-      '#group' => 'raw_json_results_tab',
-      '#attributes' => array('style' => '-webkit-border-radius: 0px;'),
+    $form['raw_json_results_tab'] = array(
+      '#type'  => 'fieldset',
+      '#title' => t('Raw JSON Results'),
+      '#group' => 'group_search_results_tabs',
       );
+
+
+    if(!empty($form_state['raw_json_results'])) {
+      if(substr_count( $form_state['raw_json_results'], "\n" ) <= 1000){
+        $output = $form_state['raw_json_results'];
+        $link_to_fulltext = '';
+      }else {
+        $lines = explode("\n", $form_state['raw_json_results']);
+        $output = implode("\n", array_slice($lines, 0, 1000));
+        $link_to_fulltext = '<a href="/full_json/' . $form_state['query_reference'] . '"" target="_blank">Click to view full JSON</a>';
+      }
+
+      $copy_js = 'jQuery().ready(function(){
+
+        jQuery("#edit-copy-to-clipboard").click( function (e) {
+          e.preventDefault();
+          var temp = jQuery("<input>");
+          jQuery("body").append(temp);
+          temp.val(jQuery("#holdtext").text()).select();
+          document.execCommand("copy");
+          temp.remove();
+        });
+
+      });';
+      drupal_add_js($copy_js, 'inline');
+
+      $form['raw_json_results_tab']['copy_to_clipboard'] = array(
+        '#value' => 'Copy to Clipboard',
+        '#type' => 'submit',
+        '#name' => 'copy',
+        '#group' => 'raw_json_results_tab',
+        '#attributes' => array('style' => '-webkit-border-radius: 0px;'),
+        );
 
       // print out the json output
-    $form['raw_json_results_tab']['raw_json_results'] = array(
+      $form['raw_json_results_tab']['raw_json_results'] = array(
+        '#type' => 'item',
+        '#markup' =>
+        '<div id="holdtext" style="display:none;">' . $form_state['raw_json_results'] . '</div>
+        <pre>' . $output . '</pre>' . $link_to_fulltext,
+        '#group' => 'raw_json_results_tab',
+        );
+    }
+  }
+  if(!empty($form_state['structured_search_results']) || !empty($form_state['raw_json_results'])){
+    $form['link_to_top'] = array(
       '#type' => 'item',
-      '#markup' =>
-      '<div id="holdtext" style="display:none;">' . $form_state['raw_json_results'] . '</div>
-      <pre>' . $output . '</pre>' . $link_to_fulltext,
-      '#group' => 'raw_json_results_tab',
+      '#markup' => '<a href="#">Back to top of page</a>',
       );
   }
-}
-if(!empty($form_state['structured_search_results']) || !empty($form_state['raw_json_results'])){
-  $form['link_to_top'] = array(
-    '#type' => 'item',
-    '#markup' => '<a href="#">Back to top of page</a>',
-    );
+
+  return $form;
 }
 
-return $form;
+function _facet_add_item($form, &$form_state) {
+  $form_state['facet_num_items']++;
+  $form_state['rebuild'] = TRUE;
+}
+
+function _facet_remove_item($form, &$form_state) {
+  if ($form_state['facet_num_items'] > 1) {
+    $form_state['facet_num_items']--;
+  }
+  $form_state['rebuild'] = TRUE;
+}
+
+function search_console_ajax_callback($form, $form_state) {
+  return $form['search_field_filters_tab']['facets'];
 }
 
 function search_console_form_submit($form, &$form_state) {
+  dumper($form_state['values']);
 
   // initialize the empty query that will eventually be submitted to EDAN for results
   $query = '';
