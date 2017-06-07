@@ -270,10 +270,20 @@ function _build_results_area($form, &$form_state) {
 
     if(!empty($form_state['structured_search_results'])){
       foreach ($form_state['structured_search_results'] as $key => $record) {
+        $fields_to_ignore = array(
+          'content',
+          'title',
+          'hash',
+          'docSignature',
+          'lastTimeUpdated',
+          );
         // get fields printed out nicely for the structured search resutls
         $fields = '';
+        $fields .= (isset($record['title']) ? '<h2>' . $record['title'] . '</h2>' : '');
         foreach ($record as $field_key => $field_value) {
-          if($field_key != 'content') $fields .= '<strong>' . $field_key . ':</strong> ' . $field_value . "\n";
+          if(!in_array($field_key, $fields_to_ignore)) {
+            $fields .= '<strong>' . str_pad($field_key . ':', 16) . '</strong>' . $field_value . "\n";
+          }
         }
         // add an image to the result if one exists
         $image = '';
@@ -284,18 +294,18 @@ function _build_results_area($form, &$form_state) {
           $full_image_link_literal = $record['content']['descriptiveNonRepeating']['online_media']['media'][0]['content'];
           $full_image_link = startsWith('http', $full_image_link_literal) ? $full_image_link_literal : 'https://ids.si.edu/ids/deliveryService/?id=' . $full_image_link_literal;
 
-          $image = '<a href="' . $full_image_link . '" target="_blank"><img src="' . $thumbnail_link . '" style="max-width: 25%;display: block;margin: auto;"></a>';
+          $image = '<a href="' . $full_image_link . '" target="_blank" style="display: flex;max-width: 25%;max-height:100%;margin: auto;"><img src="' . $thumbnail_link . '" style="max-width:100%;max-height:100%;"></a>';
         }
 
         $form['structured_search_results_tab']['structured_search_results'][$key] = array(
           '#type' => 'item',
-          '#markup' => '<pre>' .
+          '#markup' => '<div class="structured-result">' .
           ( !empty($image) ?
-            '<div style="float:left; max-width: 70%; padding-right: 5%;">' . $fields . '</div>' . $image
+            '<div style="float:left; max-width: 70%; padding-right: 5%; max-height:100%;">' . $fields . '</div>' . $image
             :
             '<div style="float:left; max-width: 100%;">' . $fields . '</div>' ) .
           '<a href="/full_record/' . $record['id'] . '" target="_blank" style="float: left;clear: both;">View Full Record</a>
-        </pre>',
+        </div>',
         '#group' => 'structured_search_results_tab',
         );
       }
@@ -383,6 +393,10 @@ function search_console_form($form, &$form_state) {
   drupal_add_js(
     drupal_get_path('module', 'search_console') . '/js/search_console.js',
     array('scope' => 'footer', 'weight' => 3)
+  );
+  drupal_add_css(
+    drupal_get_path('module', 'search_console') . '/css/custom.css',
+    array('group' => CSS_DEFAULT, 'every_page' => TRUE)
   );
 
   return $form;
