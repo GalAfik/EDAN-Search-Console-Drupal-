@@ -1,3 +1,4 @@
 name = EDAN Search Console
 core = 7.x
 package = EDAN
+configure = admin/config/search/edan-search-console

@@ -40,26 +40,26 @@ function edan_search_console_admin() {
 
 function edan_search_console_menu() {
 
-  $items['search_console'] = array(
+  $items['edan/search-console'] = array(
     'title' => 'Search Console',
     'page callback' => 'drupal_get_form',
-    'page arguments' => array('search_console_form'),
+    'page arguments' => array('edan_search_console_form'),
     'access arguments' => array('use search console'),
     );
 
-  $items['full_json'] = array(
+  $items['edan/search-console/full-json'] = array(
     'page callback' => '_edan_search_console_full_json_page_callback',
     'page arguments' => array(),
     'access arguments' => array('use search console'),
     );
 
-  $items['full_record'] = array(
+  $items['edan/search-console/full-record'] = array(
     'page callback' => '_edan_search_console_full_record_page_callback',
     'page arguments' => array(),
     'access arguments' => array('use search console'),
     );
 
-  $items['search_console_settings'] = array(
+  $items['admin/config/search/edan-search-console'] = array(
     'title' => t('Search Console Settings'),
     'page callback' => 'drupal_get_form',
     'page arguments' => array('edan_search_console_admin'),
@@ -73,7 +73,7 @@ function edan_search_console_menu() {
 function _edan_search_console_full_json_page_callback() {
   $path_parts = arg();
   $query = $path_parts[1];
-  $json = _get_search_results_from_edan($query);
+  $json = _edan_search_console_get_search_results_from_edan($query);
 
   echo '<pre>' . $json . '</pre>';
   exit();
@@ -82,7 +82,7 @@ function _edan_search_console_full_json_page_callback() {
 function _edan_search_console_full_record_page_callback() {
   $path_parts = arg();
   $query = 'q=id:' . $path_parts[1];
-  $json = _get_search_results_from_edan($query);
+  $json = _edan_search_console_get_search_results_from_edan($query);
 
   echo '<pre>' . $json . '</pre>';
   exit();
@@ -90,10 +90,9 @@ function _edan_search_console_full_record_page_callback() {
 
 function _edan_search_console_get_search_results_from_edan($query = '') {
 
-  $config = require('config.php');
-  $host = variable_get('search_console_host', $config->host);
-  $authKey = variable_get('search_console_auth_key', $config->auth_key);
-  $appId = variable_get('search_console_app_id', $config->app_id);
+  $host = variable_get('search_console_host', '');
+  $authKey = variable_get('search_console_auth_key', '');
+  $appId = variable_get('search_console_app_id', '');
   // return $resp;
   date_default_timezone_set('UTC');
   // Specify your appid and key below
@@ -108,16 +107,15 @@ function _edan_search_console_get_search_results_from_edan($query = '') {
   // Request
   $service = 'metadata/v1.1/metadata/search.htm'; // API Endpoint
   // Response
-  $results_raw = $edan->sendRequest($query, $service, FALSE, $info = '');
+  $info = array();
+  $results_raw = $edan->sendRequest($query, $service, FALSE, $info);
   return $results_raw;
 }
 
 function _edan_search_console_get_facets_from_edan() {
-
-  $config = require('config.php');
-  $host = variable_get('search_console_host', $config->host);
-  $authKey = variable_get('search_console_auth_key', $config->auth_key);
-  $appId = variable_get('search_console_app_id', $config->app_id);
+  $host = variable_get('search_console_host', '');
+  $authKey = variable_get('search_console_auth_key', '');
+  $appId = variable_get('search_console_app_id', '');
   // return $resp;
   date_default_timezone_set('UTC');
   // Specify your appid and key below
@@ -132,7 +130,8 @@ function _edan_search_console_get_facets_from_edan() {
   // Request
   $service = 'metadata/v1.1/metadata/getFacets.htm'; // API Endpoint
   // Response
-  $results_raw = $edan->sendRequest('', $service, FALSE, $info = '');
+  $info = array();
+  $results_raw = $edan->sendRequest('', $service, FALSE, $info);
   return $results_raw;
 }
 
@@ -153,8 +152,7 @@ function edan_search_console_form($form, &$form_state){
   }
 
   $form['group_tabs'] = array(
-    '#type'     => 'horizontal_tabs',
-    '#attached' => array('library' => array(array('field_group', 'horizontal-tabs'))),
+    '#type'     => 'vertical_tabs',
     );
 
   // Search Field Filters Tab
@@ -261,7 +259,7 @@ function edan_search_console_form($form, &$form_state){
   drupal_add_library('system', 'ui.autocomplete');
   // following this, autocomplete_options contains an array of facet names that each contains an array of possible facet values for that field
   $autocomplete_options = array();
-  $results = json_decode(_get_facets_from_edan(), TRUE);
+  $results = json_decode(_edan_search_console_get_facets_from_edan(), TRUE);
   foreach ($results['facets'] as $facet_name => $facet_values) {
     foreach ($facet_values as $facet_value) {
       $autocomplete_options[ $facet_name ][] = $facet_value[0];
@@ -303,7 +301,7 @@ function edan_search_console_form($form, &$form_state){
   );
  $form['query_tab']['query'] = array(
   '#title' => t('Raw Decoded Query'),
-  '#type' => 'text_format',
+  '#type' => 'textarea',
   '#description' => 'You may enter your search filters as a raw query into this field in order to narrow down your search results.',
   '#group' => 'query_tab',
   );
@@ -434,8 +432,7 @@ $form['query_reference'] = array(
 
   // results display area
 $form['group_search_results_tabs'] = array(
-  '#type'     => 'horizontal_tabs',
-  '#attached' => array('library' => array(array('field_group', 'horizontal-tabs'))),
+  '#type'     => 'vertical_tabs',
   );
 
 if(isset($form_state['structured_search_results'])){
@@ -453,22 +450,31 @@ if(isset($form_state['structured_search_results'])){
         if($field_key != 'content') $fields .= '<strong>' . $field_key . ':</strong> ' . $field_value . "\n";
       }
       // add an image to the result if one exists
-      $image = '';
-      if (isset($record['content']['descriptiveNonRepeating']['online_media']['mediaCount']) && $record['content']['descriptiveNonRepeating']['online_media']['mediaCount'] >= 1) {
-        $image = '<a href="' . $record['content']['descriptiveNonRepeating']['online_media']['media'][0]['content'] . '" target="_blank"><img src="' . $record['content']['descriptiveNonRepeating']['online_media']['media'][0]['thumbnail'] . '" style="max-width: 25%;display: block;margin: auto;"></a>';
+      $image = ''; # TODO: Fix me
+      if (isset($record['content']['descriptiveNonRepeating']['online_media']['media'][0]['idsId'])) {
+        $thumbnail_link_literal = $record['content']['descriptiveNonRepeating']['online_media']['media'][0]['idsId'];
+        $thumbnail_link = 'https://ids.si.edu/ids/deliveryService/?max_w=200&id=' . $thumbnail_link_literal;
+        $full_image_link_literal = $record['content']['descriptiveNonRepeating']['online_media']['media'][0]['idsId'];
+        $full_image_link = 'https://ids.si.edu/ids/deliveryService/?id=' . $full_image_link_literal;
+        $image = '<a href="' . $full_image_link . '" target="_blank" style="display: flex;max-width: 25%;margin: auto;"><img src="' . $thumbnail_link . '" style="max-width:100%;"></a>';
+      }elseif (isset($record['content']['descriptiveNonRepeating']['online_media']['media'][0]['thumbnail'])) {
+        $thumbnail_link_literal = $record['content']['descriptiveNonRepeating']['online_media']['media'][0]['thumbnail'];
+        $thumbnail_link = (substr($thumbnail_link_literal, 0, 4) == 'http') ? $thumbnail_link_literal : 'https://ids.si.edu/ids/deliveryService/?max_w=200&id=' . $thumbnail_link_literal;
+        $full_image_link_literal = $record['content']['descriptiveNonRepeating']['online_media']['media'][0]['content'];
+        $full_image_link = (substr($full_image_link_literal, 0, 4) == 'http') ? $full_image_link_literal : 'https://ids.si.edu/ids/deliveryService/?id=' . $full_image_link_literal;
+        $image = '<a href="' . $full_image_link . '" target="_blank" style="display: flex;max-width: 25%;margin: auto;"><img src="' . $thumbnail_link . '" style="max-width:100%;"></a>';
       }
-
       $form['structured_search_results_tab']['structured_search_results'][$key] = array(
         '#type' => 'item',
         '#markup' => '<pre>' .
         ( !empty($image) ?
-        '<div style="float:left; max-width: 70%; padding-right: 5%;">' . $fields . '</div>' . $image
-        :
-        '<div style="float:left; max-width: 100%;">' . $fields . '</div>' ) .
+          '<div style="float:left; max-width: 70%; padding-right: 5%; max-height:100%;">' . $fields . '</div>' . $image
+          :
+          '<div style="float:left; max-width: 100%;">' . $fields . '</div>' ) .
         '<a href="/full_record/' . $record['id'] . '" target="_blank" style="float: left;clear: both;">View Full Record</a>
-        </pre>',
-        '#group' => 'structured_search_results_tab',
-        );
+      </pre>',
+      '#group' => 'structured_search_results_tab',
+      );
     }
   }else{
     drupal_set_message('Your search returned no results. This may be due to a lack of matching records within EDAN or an invalid parameter. Please check that all of your parameters are set correctly.', 'warning');
@@ -503,11 +509,13 @@ if(isset($form_state['raw_json_results'])){
 
       jQuery("#edit-copy-to-clipboard").click( function (e) {
         e.preventDefault();
-        var temp = jQuery("<input>");
+        /*var temp = jQuery("<input>");
         jQuery("body").append(temp);
         temp.val(jQuery("#holdtext").text()).select();
         document.execCommand("copy");
-        temp.remove();
+        temp.remove();*/
+        jQuery("#holdtext").select();
+        document.execCommand("copy");
       });
 
     });';
@@ -525,7 +533,7 @@ if(isset($form_state['raw_json_results'])){
     $form['raw_json_results_tab']['raw_json_results'] = array(
       '#type' => 'item',
       '#markup' =>
-      '<div id="holdtext" style="display:none;">' . $form_state['raw_json_results'] . '</div>
+      '<textarea id="holdtext" style="height: 20px; width: 20px; position: absolute; top: -10000px;">' . $form_state['raw_json_results'] . '</textarea>
       <pre>' . $output . '</pre>' . $link_to_fulltext,
       '#group' => 'raw_json_results_tab',
       );
@@ -781,7 +789,7 @@ function edan_search_console_form_submit($form, &$form_state) {
   }
 
     // set the raw json results
-  $raw_json_results = _get_search_results_from_edan(isset($query) ? $query : '');
+  $raw_json_results = _edan_search_console_get_search_results_from_edan(isset($query) ? $query : '');
   $form_state['raw_json_results'] = $raw_json_results;
 
     // set the structured search results
