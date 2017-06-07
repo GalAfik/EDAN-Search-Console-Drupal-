@@ -61,6 +61,11 @@ function search_console_menu() {
     'access arguments' => array('use search console'),
     );
 
+  $items['facets_reference_guide'] = array(
+    'page callback' => '_facets_guide_page_callback',
+    'access arguments' => array('use search console'),
+    );
+
   $items['search_console_settings'] = array(
     'title' => t('Search Console Settings'),
     'page callback' => 'drupal_get_form',
@@ -136,6 +141,25 @@ function _get_facets_from_edan($query = '') {
   // Response
   $results_raw = $edan->sendRequest($query, $service, FALSE, $info = '');
   return $results_raw;
+}
+
+function _facets_guide_page_callback() {
+  $autocomplete_options = array();
+  $results = json_decode(_get_facets_from_edan(), TRUE);
+  foreach ($results['facets'] as $facet_name => $facet_values) {
+    foreach ($facet_values as $facet_value) {
+      $autocomplete_options[ $facet_name ][] = $facet_value[0];
+    }
+  }
+
+  foreach ($autocomplete_options as $key => $values) {
+    echo '<h2>' . $key . '</h2><ul>';
+    foreach ($values as $value) {
+      echo '<li>' . $value . '</li>';
+    }
+    echo '</ul><br>';
+  }
+  exit();
 }
 
 function _get_object_types() {
@@ -250,6 +274,7 @@ function search_console_form($form, &$form_state) {
     '#title' => 'Facets',
     '#prefix' => '<div id="facet-wrapper">',
     '#suffix' => '</div>',
+    '#description' => 'Facets can be used to narrow your search query by specific attributes contained within each record. In order to select all records containing images, you might add an "Online Media Type" facet and set it to "Images". Some available facets and their qualified values may be viewed <a href="/facets_reference_guide" target="_blank">here</a>.',
     );
 
   // get list of facet names based on type
@@ -287,13 +312,13 @@ function search_console_form($form, &$form_state) {
     $form_state['facet_name'] = isset($form_state['values']['facet_name_' . $i]) ? $form_state['values']['facet_name_' . $i] : '';
 
     // following this, autocomplete_options contains an array of facet names that each contains an array of possible facet values for that field
-    // $autocomplete_options = array();
-    // $results = json_decode(_get_facets_from_edan(), TRUE);
-    // foreach ($results['facets'] as $facet_name => $facet_values) {
-    //   foreach ($facet_values as $facet_value) {
-    //     $autocomplete_options[ $facet_name ][] = $facet_value[0];
-    //   }
-    // }
+    $autocomplete_options = array();
+    $results = json_decode(_get_facets_from_edan(), TRUE);
+    foreach ($results['facets'] as $facet_name => $facet_values) {
+      foreach ($facet_values as $facet_value) {
+        $autocomplete_options[ $facet_name ][] = $facet_value[0];
+      }
+    }
 
     // // add tooltip script for each field that has existing facets
     // if (array_key_exists($facet_name, $autocomplete_options)) {
@@ -520,8 +545,11 @@ function search_console_form($form, &$form_state) {
         }
       // add an image to the result if one exists
         $image = '';
-        if (isset($record['content']['descriptiveNonRepeating']['online_media']['mediaCount']) && $record['content']['descriptiveNonRepeating']['online_media']['mediaCount'] >= 1) {
-          $image = '<a href="' . $record['content']['descriptiveNonRepeating']['online_media']['media'][0]['content'] . '" target="_blank"><img src="' . $record['content']['descriptiveNonRepeating']['online_media']['media'][0]['thumbnail'] . '" style="max-width: 25%;display: block;margin: auto;"></a>';
+        if (isset($record['content']['descriptiveNonRepeating']['online_media']['media'][0]['thumbnail'])) {
+          $thumbnail_link = startsWith('http', $record['content']['descriptiveNonRepeating']['online_media']['media'][0]['thumbnail']) ? $record['content']['descriptiveNonRepeating']['online_media']['media'][0]['thumbnail'] : 'https://ids.si.edu/ids/deliveryService/?id=' . $record['content']['descriptiveNonRepeating']['online_media']['media'][0]['thumbnail'] . '&max_w=200px';
+          $full_image_link = startsWith('http', $record['content']['descriptiveNonRepeating']['online_media']['media'][0]['content']) ? $record['content']['descriptiveNonRepeating']['online_media']['media'][0]['content'] : 'https://ids.si.edu/ids/deliveryService/?id=' . $record['content']['descriptiveNonRepeating']['online_media']['media'][0]['content'];
+
+          $image = '<a href="' . $full_image_link . '" target="_blank"><img src="' . $thumbnail_link . '" style="max-width: 25%;display: block;margin: auto;"></a>';
         }
 
         $form['structured_search_results_tab']['structured_search_results'][$key] = array(
