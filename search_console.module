@@ -274,10 +274,10 @@ function search_console_form($form, &$form_state) {
       '#type' => 'select',
       '#title' => t('Facet #' . $i),
       '#options' => _get_facet_names($object_type),
-      '#ajax' => array(
-        'wrapper' => 'facet-wrapper',
-        'callback' => 'search_console_ajax_callback',
-        ),
+      // '#ajax' => array(
+      //   'wrapper' => 'facet-wrapper',
+      //   'callback' => 'search_console_ajax_callback',
+      //   ),
       );
     $form['search_field_filters_tab']['facets']['facet_value_' . $i] = array(
       '#type' => 'textfield',
@@ -287,15 +287,15 @@ function search_console_form($form, &$form_state) {
     $form_state['facet_name'] = isset($form_state['values']['facet_name_' . $i]) ? $form_state['values']['facet_name_' . $i] : '';
 
     // following this, autocomplete_options contains an array of facet names that each contains an array of possible facet values for that field
-    $autocomplete_options = array();
-    $results = json_decode(_get_facets_from_edan(), TRUE);
-    foreach ($results['facets'] as $facet_name => $facet_values) {
-      foreach ($facet_values as $facet_value) {
-        $autocomplete_options[ $facet_name ][] = $facet_value[0];
-      }
-    }
+    // $autocomplete_options = array();
+    // $results = json_decode(_get_facets_from_edan(), TRUE);
+    // foreach ($results['facets'] as $facet_name => $facet_values) {
+    //   foreach ($facet_values as $facet_value) {
+    //     $autocomplete_options[ $facet_name ][] = $facet_value[0];
+    //   }
+    // }
 
-    // add tooltip script for each field that has existing facets
+    // // add tooltip script for each field that has existing facets
     // if (array_key_exists($facet_name, $autocomplete_options)) {
     //   $autocomplete_js = '
     //   jQuery(document).ready(function() {
@@ -623,9 +623,21 @@ function search_console_ajax_callback($form, $form_state) {
   return $form['search_field_filters_tab']['facets'];
 }
 
-function search_console_form_submit($form, &$form_state) {
-  dumper($form_state['values']);
+function startsWith($needle, $haystack) {
+     $length = strlen($needle);
+     return (substr($haystack, 0, $length) === $needle);
+}
 
+function endsWith($needle, $haystack) {
+    $length = strlen($needle);
+    if ($length == 0) {
+        return true;
+    }
+
+    return (substr($haystack, -$length) === $needle);
+}
+
+function search_console_form_submit($form, &$form_state) {
   // initialize the empty query that will eventually be submitted to EDAN for results
   $query = '';
 
@@ -643,16 +655,20 @@ function search_console_form_submit($form, &$form_state) {
     $query_parameters['fqs'] = array();
 
     // build out the fqs from applicable, set facets and set record type according to dropdown selection
-    if(isset($form_state['values']['record_type']) && !empty($form_state['values']['record_type'])){
+    if(isset($form_state['values']['record_type']) && !empty($form_state['values']['record_type'])) {
       // look for only records of type record_type
       $record_type = $form_state['values']['record_type'];
       $query_parameters['fqs'][] = 'type:' . $record_type;
+    }
 
-      // add facets to search
-      foreach ($form_state['values'] as $key => $value) {
-        // if this field is of the type that starts with the current record type, then add it to the parameters array
-        if(substr($key, 0, strlen($record_type)) == $record_type && !empty($value)){
-          $query_parameters['fqs'][] = str_replace($record_type . '_', '', $key) . ':' . $value;
+    // add facets to search
+    foreach ($form_state['values'] as $key => $value) {
+      if (startsWith('facet_name_', $key) && !empty($value)) {
+        $facet_number = str_replace('facet_name_', '', $key);
+        if (array_key_exists('facet_value_' . $facet_number, $form_state['values']) &&
+          !empty($form_state['values']['facet_value_' . $facet_number])) {
+          // add this name:value pair to the fqs
+          $query_parameters['fqs'][] = $form_state['values']['facet_name_' . $facet_number] . ':' . $form_state['values']['facet_value_' . $facet_number];
         }
       }
     }
@@ -749,9 +765,7 @@ function search_console_form_submit($form, &$form_state) {
         // set the filters on the filters tab
         $fq_key = reset(explode(':', $fq));
         $fq_value = end(explode(':', $fq));
-        if (isset($form_state['input']['edanmdm_' . $fq_key ])) {
-          $form_state['input']['edanmdm_' . $fq_key ] = $fq_value;
-        }
+
       }
       $query .= ']';
       // unset fqs from the parameters to make sure it's not reapplied
@@ -833,9 +847,7 @@ function search_console_form_submit($form, &$form_state) {
       // set the filters on the filters tab
       $fq_key = reset(explode(':', $fq));
       $fq_value = end(explode(':', $fq));
-      if (isset($form_state['input']['edanmdm_' . $fq_key ])) {
-        $form_state['input']['edanmdm_' . $fq_key ] = $fq_value;
-      }
+
     }
     break;
   }
