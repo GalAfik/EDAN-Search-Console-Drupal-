@@ -206,7 +206,7 @@ function _build_filters_tab($form, &$form_state) {
     );
 
   // If we have more than one item, this button allows removal of the last item.
-  if ($form_state['facet_num_items'] > 1) {
+  if ($form_state['facet_num_items'] > 0) {
     $form['search_field_filters_tab']['facets']['remove_facet_item'] = array(
       '#name' => 'remove_facet_item',
       '#type' => 'submit',
@@ -394,7 +394,7 @@ function _facet_add_item($form, &$form_state) {
 }
 
 function _facet_remove_item($form, &$form_state) {
-  if ($form_state['facet_num_items'] > 1) {
+  if ($form_state['facet_num_items'] > 0) {
     $form_state['facet_num_items']--;
   }
   $form_state['rebuild'] = TRUE;
