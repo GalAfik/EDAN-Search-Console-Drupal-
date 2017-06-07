@@ -56,4 +56,13 @@ jQuery(document).ready(function() {
     temp.remove();
   });
 
+  $('#search-console-form').keypress( function( e ) {
+  var code = e.keyCode || e.which;
+
+  if( code === 13 ) {
+    e.preventDefault();
+    return false;
+  }
+})
+
 });

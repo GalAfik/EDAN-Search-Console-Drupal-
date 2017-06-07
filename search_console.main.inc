@@ -294,18 +294,18 @@ function _build_results_area($form, &$form_state) {
           $full_image_link_literal = $record['content']['descriptiveNonRepeating']['online_media']['media'][0]['content'];
           $full_image_link = startsWith('http', $full_image_link_literal) ? $full_image_link_literal : 'https://ids.si.edu/ids/deliveryService/?id=' . $full_image_link_literal;
 
-          $image = '<a href="' . $full_image_link . '" target="_blank" style="display: flex;max-width: 25%;max-height:100%;margin: auto;"><img src="' . $thumbnail_link . '" style="max-width:100%;max-height:100%;"></a>';
+          $image = '<a href="' . $full_image_link . '" target="_blank"><img src="' . $thumbnail_link . '" style="display: flex;max-width: 25%;max-height:100%;margin: auto;""></a>';
         }
 
         $form['structured_search_results_tab']['structured_search_results'][$key] = array(
           '#type' => 'item',
-          '#markup' => '<div class="structured-result">' .
+          '#markup' => '<pre>' .
           ( !empty($image) ?
             '<div style="float:left; max-width: 70%; padding-right: 5%; max-height:100%;">' . $fields . '</div>' . $image
             :
             '<div style="float:left; max-width: 100%;">' . $fields . '</div>' ) .
           '<a href="/full_record/' . $record['id'] . '" target="_blank" style="float: left;clear: both;">View Full Record</a>
-        </div>',
+        </pre>',
         '#group' => 'structured_search_results_tab',
         );
       }
