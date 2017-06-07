@@ -224,18 +224,8 @@ function search_console_form($form, &$form_state){
     '#type' => 'textfield',
     '#group' => 'search_field_filters_tab',
     );
-  $form['search_field_filters_tab']['facets']['edanmdm_name'] = array(
-    '#title' => t('name'),
-    '#type' => 'textfield',
-    '#group' => 'search_field_filters_tab',
-    );
   $form['search_field_filters_tab']['facets']['edanmdm_culture'] = array(
     '#title' => t('culture'),
-    '#type' => 'textfield',
-    '#group' => 'search_field_filters_tab',
-    );
-  $form['search_field_filters_tab']['facets']['edanmdm_language'] = array(
-    '#title' => t('language'),
     '#type' => 'textfield',
     '#group' => 'search_field_filters_tab',
     );
@@ -246,41 +236,6 @@ function search_console_form($form, &$form_state){
     );
   $form['search_field_filters_tab']['facets']['edanmdm_date'] = array(
     '#title' => t('date'),
-    '#type' => 'textfield',
-    '#group' => 'search_field_filters_tab',
-    );
-  $form['search_field_filters_tab']['facets']['edanmdm_data_source'] = array(
-    '#title' => t('data_source'),
-    '#type' => 'textfield',
-    '#group' => 'search_field_filters_tab',
-    );
-  $form['search_field_filters_tab']['facets']['edanmdm_tax_kingdom'] = array(
-    '#title' => t('tax_kingdom'),
-    '#type' => 'textfield',
-    '#group' => 'search_field_filters_tab',
-    );
-  $form['search_field_filters_tab']['facets']['edanmdm_tax_phylum'] = array(
-    '#title' => t('tax_phylum'),
-    '#type' => 'textfield',
-    '#group' => 'search_field_filters_tab',
-    );
-  $form['search_field_filters_tab']['facets']['edanmdm_tax_class'] = array(
-    '#title' => t('tax_class'),
-    '#type' => 'textfield',
-    '#group' => 'search_field_filters_tab',
-    );
-  $form['search_field_filters_tab']['facets']['edanmdm_tax_order'] = array(
-    '#title' => t('tax_order'),
-    '#type' => 'textfield',
-    '#group' => 'search_field_filters_tab',
-    );
-  $form['search_field_filters_tab']['facets']['edanmdm_tax_family'] = array(
-    '#title' => t('tax_family'),
-    '#type' => 'textfield',
-    '#group' => 'search_field_filters_tab',
-    );
-  $form['search_field_filters_tab']['facets']['edanmdm_scientific_name'] = array(
-    '#title' => t('scientific name'),
     '#type' => 'textfield',
     '#group' => 'search_field_filters_tab',
     );
@@ -319,18 +274,9 @@ function search_console_form($form, &$form_state){
     'online_media_type',
     'object_type',
     'topic',
-    'name',
     'culture',
-    'language',
     'place',
     'date',
-    'data_source',
-    'tax_kingdom',
-    'tax_phylum',
-    'tax_class',
-    'tax_order',
-    'tax_family',
-    'scientific name',
     );
 
   // add tooltip script for each field that has existing facets
