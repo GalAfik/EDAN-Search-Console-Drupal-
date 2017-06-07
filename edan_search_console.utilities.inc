@@ -14,12 +14,11 @@ function endsWith($needle, $haystack) {
   return (substr($haystack, -$length) === $needle);
 }
 
-function _get_search_results_from_edan($query = '') {
+function _edan_search_console_get_search_results_from_edan($query = '') {
 
-  $config = require('config.php');
-  $host = variable_get('search_console_host', $config->host);
-  $authKey = variable_get('search_console_auth_key', $config->auth_key);
-  $appId = variable_get('search_console_app_id', $config->app_id);
+  $host = variable_get('search_console_host', '');
+  $authKey = variable_get('search_console_auth_key', '');
+  $appId = variable_get('search_console_app_id', '');
   // return $resp;
   date_default_timezone_set('UTC');
   // Specify your appid and key below
@@ -34,16 +33,15 @@ function _get_search_results_from_edan($query = '') {
   // Request
   $service = 'metadata/v1.1/metadata/search.htm'; // API Endpoint
   // Response
-  $results_raw = $edan->sendRequest($query, $service, FALSE, $info = '');
+  $results_raw = $edan->sendRequest($query, $service, FALSE, $info);
   return $results_raw;
 }
 
-function _get_facets_from_edan($query = '') {
+function _edan_search_console_get_facets_from_edan($query = '') {
 
-  $config = require('config.php');
-  $host = variable_get('search_console_host', $config->host);
-  $authKey = variable_get('search_console_auth_key', $config->auth_key);
-  $appId = variable_get('search_console_app_id', $config->app_id);
+  $host = variable_get('search_console_host', '');
+  $authKey = variable_get('search_console_auth_key', '');
+  $appId = variable_get('search_console_app_id', '');
   // return $resp;
   date_default_timezone_set('UTC');
   // Specify your appid and key below
@@ -58,7 +56,7 @@ function _get_facets_from_edan($query = '') {
   // Request
   $service = 'metadata/v1.1/metadata/getFacets.htm'; // API Endpoint
   // Response
-  $results_raw = $edan->sendRequest($query, $service, FALSE, $info = '');
+  $results_raw = $edan->sendRequest($query, $service, FALSE, $info);
   return $results_raw;
 }
 

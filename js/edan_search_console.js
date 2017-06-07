@@ -45,15 +45,9 @@ jQuery(document).ready(function() {
   //  handles copying to clipboard
   jQuery("#edit-copy-to-clipboard").click( function (e) {
     e.preventDefault();
-    // create a temporary input and attach it to the body
-    var temp = jQuery("<input>");
-    jQuery("body").append(temp);
-    // set the temp input value to a copy of #holdtext value
-    temp.val(jQuery("#holdtext").text()).select();
+    jQuery("#holdtext").select();
     // copy the temp input value to the clipboard
     document.execCommand("copy");
-    // remove temp
-    temp.remove();
   });
 
   $('#search-console-form').keypress( function( e ) {

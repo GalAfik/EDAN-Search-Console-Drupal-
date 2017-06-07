@@ -1,8 +1,8 @@
 <?php
 
-function _full_json_page_callback() {
+function _edan_search_console_full_record_page_callback() {
   $path_parts = arg();
-  $query = $path_parts[1];
+  $query = 'q=id:' . $path_parts[1];
   $json = _get_search_results_from_edan($query);
 
   echo '<pre>' . $json . '</pre>';

@@ -1,0 +1,67 @@
+<?php
+
+require_once('EDANInterface.php');
+include('edan_search_console.utilities.inc');
+
+function edan_edan_search_console_permission() {
+  return array(
+    'administer search console settings' => array(
+      'title' => t('Administer EDAN Search Console Settings'),
+      'description' => t('Edit EDAN Search Console Settings.'),
+      ),
+    'use search console' => array(
+      'title' => t('Use EDAN Search Console'),
+      'description' => t('Use EDAN Search Console.'),
+      ),
+    );
+}
+
+function edan_search_console_menu() {
+
+  $items['edan/search-console'] = array(
+    'title' => 'Search Console',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('edan_search_console_form'),
+    'access arguments' => array('use search console'),
+    'file' => 'edan_search_console.main.inc',
+    'file path' => drupal_get_path('module', 'edan_search_console'),
+    );
+
+  $items['edan/search-console/full-json'] = array(
+    'page callback' => '_edan_search_console_full_json_page_callback',
+    'page arguments' => array(),
+    'access arguments' => array('use search console'),
+    'type' => MENU_CALLBACK,
+    'file' => 'edan_search_console.json.inc',
+    'file path' => drupal_get_path('module', 'edan_search_console'),
+    );
+
+  $items['edan/search-console/full-record'] = array(
+    'page callback' => '_edan_search_console_full_record_page_callback',
+    'page arguments' => array(),
+    'access arguments' => array('use search console'),
+    'type' => MENU_CALLBACK,
+    'file' => 'edan_search_console.record.inc',
+    'file path' => drupal_get_path('module', 'edan_search_console'),
+    );
+
+  $items['facets_reference_guide'] = array(
+    'page callback' => '_edan_search_console_facets_guide_page_callback',
+    'access arguments' => array('use search console'),
+    'type' => MENU_CALLBACK,
+    'file' => 'edan_search_console.facets.inc',
+    'file path' => drupal_get_path('module', 'edan_search_console'),
+    );
+
+  $items['admin/config/search/edan-search-console'] = array(
+    'title' => t('Search Console Settings'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('edan_search_console_admin'),
+    'access arguments' => array('administer search console settings'),
+    'type' => MENU_CALLBACK,
+    'file' => 'edan_search_console.admin.inc',
+    'file path' => drupal_get_path('module', 'edan_search_console'),
+    );
+
+  return $items;
+}

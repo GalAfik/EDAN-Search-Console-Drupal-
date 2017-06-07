@@ -1,0 +1,4 @@
+name = search_console
+core = 7.x
+package = Own
+configure = admin/config/search/edan-search-console

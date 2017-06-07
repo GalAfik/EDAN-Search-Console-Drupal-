@@ -1,6 +1,6 @@
 <?php
 
-function _facets_guide_page_callback() {
+function _edan_search_console_facets_guide_page_callback() {
   $autocomplete_options = array();
   $results = json_decode(_get_facets_from_edan(), TRUE);
   foreach ($results['facets'] as $facet_name => $facet_values) {
