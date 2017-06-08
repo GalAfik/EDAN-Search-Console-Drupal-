@@ -17,22 +17,22 @@ function edan_search_console_permission() {
 
 function edan_search_console_admin() {
 
-  $form['search_console_host'] = array(
+  $form['edan_search_console_host'] = array(
     '#type' => 'textfield',
     '#title' => t('Host'),
-    '#default_value' => variable_get('search_console_host', ''),
+    '#default_value' => variable_get('edan_search_console_host', ''),
     );
 
-  $form['search_console_auth_key'] = array(
+  $form['edan_search_console_auth_key'] = array(
     '#type' => 'textfield',
     '#title' => t('Authorization Key'),
-    '#default_value' => variable_get('search_console_auth_key', ''),
+    '#default_value' => variable_get('edan_search_console_auth_key', ''),
     );
 
-  $form['search_console_app_id'] = array(
+  $form['edan_search_console_app_id'] = array(
     '#type' => 'textfield',
     '#title' => t('Application ID'),
-    '#default_value' => variable_get('search_console_app_id', ''),
+    '#default_value' => variable_get('edan_search_console_app_id', ''),
     );
 
   return system_settings_form($form);
@@ -41,7 +41,7 @@ function edan_search_console_admin() {
 function edan_search_console_menu() {
 
   $items['edan/search-console'] = array(
-    'title' => 'Search Console',
+    'title' => 'EDAN Search Console',
     'page callback' => 'drupal_get_form',
     'page arguments' => array('edan_search_console_form'),
     'access arguments' => array('use search console'),
@@ -51,15 +51,17 @@ function edan_search_console_menu() {
     'page callback' => '_edan_search_console_full_json_page_callback',
     'page arguments' => array(),
     'access arguments' => array('use search console'),
+    'type' => MENU_CALLBACK,
     );
 
   $items['edan/search-console/full-record'] = array(
     'page callback' => '_edan_search_console_full_record_page_callback',
     'page arguments' => array(),
     'access arguments' => array('use search console'),
+    'type' => MENU_CALLBACK,
     );
 
-  $items['admin/config/search/edan-search-console'] = array(
+  $items['admin/content/edan-search-console'] = array(
     'title' => t('Search Console Settings'),
     'page callback' => 'drupal_get_form',
     'page arguments' => array('edan_search_console_admin'),
@@ -72,7 +74,7 @@ function edan_search_console_menu() {
 
 function _edan_search_console_full_json_page_callback() {
   $path_parts = arg();
-  $query = $path_parts[1];
+  $query = $path_parts[3];
   $json = _edan_search_console_get_search_results_from_edan($query);
 
   echo '<pre>' . $json . '</pre>';
@@ -81,7 +83,7 @@ function _edan_search_console_full_json_page_callback() {
 
 function _edan_search_console_full_record_page_callback() {
   $path_parts = arg();
-  $query = 'q=id:' . $path_parts[1];
+  $query = 'q=id:' . $path_parts[3];
   $json = _edan_search_console_get_search_results_from_edan($query);
 
   echo '<pre>' . $json . '</pre>';
@@ -90,9 +92,9 @@ function _edan_search_console_full_record_page_callback() {
 
 function _edan_search_console_get_search_results_from_edan($query = '') {
 
-  $host = variable_get('search_console_host', '');
-  $authKey = variable_get('search_console_auth_key', '');
-  $appId = variable_get('search_console_app_id', '');
+  $host = variable_get('edan_search_console_host', '');
+  $authKey = variable_get('edan_search_console_auth_key', '');
+  $appId = variable_get('edan_search_console_app_id', '');
   // return $resp;
   date_default_timezone_set('UTC');
   // Specify your appid and key below
@@ -113,9 +115,9 @@ function _edan_search_console_get_search_results_from_edan($query = '') {
 }
 
 function _edan_search_console_get_facets_from_edan() {
-  $host = variable_get('search_console_host', '');
-  $authKey = variable_get('search_console_auth_key', '');
-  $appId = variable_get('search_console_app_id', '');
+  $host = variable_get('edan_search_console_host', '');
+  $authKey = variable_get('edan_search_console_auth_key', '');
+  $appId = variable_get('edan_search_console_app_id', '');
   // return $resp;
   date_default_timezone_set('UTC');
   // Specify your appid and key below
@@ -147,7 +149,7 @@ function edan_search_console_form($form, &$form_state){
     // hyperlink to the admin page for changing authentication settings
     $form['link_to_settings'] = array(
       '#type' => 'item',
-      '#markup' => 'Settings may be changed through the ' . l('settings page', '/search_console_settings') . '.',
+      '#markup' => 'Settings may be changed through the ' . l('settings page', '/admin/content/edan-search-console') . '.',
       );
   }
 
@@ -384,7 +386,7 @@ function edan_search_console_form($form, &$form_state){
       case "select-one":
       case "text":
       case "textarea":
-      if (jQuery(this).attr("id") == "edit-rows") {
+      if (jQuery(this).attr("id") == "edit-rows" || jQuery(this).attr("id") == "edit-collections-rows") {
         jQuery(this).val("10");
       } else if (jQuery(this).attr("id") == "edit-start") {
         jQuery(this).val("1");
@@ -411,7 +413,7 @@ jQuery(document).ready(function() {
 
   jQuery("#edit-clear, #edit-clear--2, #edit-clear--3").click( function (e) {
     e.preventDefault();
-    clear_form_elements(jQuery("#search-console-form"));
+    clear_form_elements(jQuery("#edan-search-console-form"));
   });
 });
 ';
@@ -451,30 +453,37 @@ if(isset($form_state['structured_search_results'])){
       }
       // add an image to the result if one exists
       $image = ''; # TODO: Fix me
-      if (isset($record['content']['descriptiveNonRepeating']['online_media']['media'][0]['idsId'])) {
-        $thumbnail_link_literal = $record['content']['descriptiveNonRepeating']['online_media']['media'][0]['idsId'];
-        $thumbnail_link = 'https://ids.si.edu/ids/deliveryService/?max_w=200&id=' . $thumbnail_link_literal;
-        $full_image_link_literal = $record['content']['descriptiveNonRepeating']['online_media']['media'][0]['idsId'];
-        $full_image_link = 'https://ids.si.edu/ids/deliveryService/?id=' . $full_image_link_literal;
-        $image = '<a href="' . $full_image_link . '" target="_blank" style="display: flex;max-width: 25%;margin: auto;"><img src="' . $thumbnail_link . '" style="max-width:100%;"></a>';
-      }elseif (isset($record['content']['descriptiveNonRepeating']['online_media']['media'][0]['thumbnail'])) {
-        $thumbnail_link_literal = $record['content']['descriptiveNonRepeating']['online_media']['media'][0]['thumbnail'];
-        $thumbnail_link = (substr($thumbnail_link_literal, 0, 4) == 'http') ? $thumbnail_link_literal : 'https://ids.si.edu/ids/deliveryService/?max_w=200&id=' . $thumbnail_link_literal;
-        $full_image_link_literal = $record['content']['descriptiveNonRepeating']['online_media']['media'][0]['content'];
-        $full_image_link = (substr($full_image_link_literal, 0, 4) == 'http') ? $full_image_link_literal : 'https://ids.si.edu/ids/deliveryService/?id=' . $full_image_link_literal;
-        $image = '<a href="' . $full_image_link . '" target="_blank" style="display: flex;max-width: 25%;margin: auto;"><img src="' . $thumbnail_link . '" style="max-width:100%;"></a>';
-      }
-      $form['structured_search_results_tab']['structured_search_results'][$key] = array(
-        '#type' => 'item',
-        '#markup' => '<pre>' .
-        ( !empty($image) ?
-          '<div style="float:left; max-width: 70%; padding-right: 5%; max-height:100%;">' . $fields . '</div>' . $image
-          :
-          '<div style="float:left; max-width: 100%;">' . $fields . '</div>' ) .
-        '<a href="/full_record/' . $record['id'] . '" target="_blank" style="float: left;clear: both;">View Full Record</a>
-      </pre>',
-      '#group' => 'structured_search_results_tab',
-      );
+      // if it's an ids image
+        if (isset($record['content']['descriptiveNonRepeating']['online_media']['media'][0]['idsId'])) {
+          // set the thumbnail
+          $thumbnail_link_literal = $record['content']['descriptiveNonRepeating']['online_media']['media'][0]['idsId'];
+          $thumbnail_link = 'https://ids.si.edu/ids/deliveryService/?max_w=100&id=' . $thumbnail_link_literal;
+          // set the link
+          $full_image_link_literal = $record['content']['descriptiveNonRepeating']['online_media']['media'][0]['idsId'];
+          $full_image_link = 'https://ids.si.edu/ids/deliveryService/?id=' . $full_image_link_literal;
+          // create the image tag
+          $image = '<a href="' . $full_image_link . '" target="_blank" style="display: flex;max-width: 25%;margin: auto;"><img src="' . $thumbnail_link . '"></a>';
+        }elseif (isset($record['content']['descriptiveNonRepeating']['online_media']['media'][0]['thumbnail'])) {
+          // set the thumbnail
+          $thumbnail_link_literal = $record['content']['descriptiveNonRepeating']['online_media']['media'][0]['thumbnail'];
+          $thumbnail_link = (substr($thumbnail_link_literal, 0, 4) == 'http') ? $thumbnail_link_literal : 'https://ids.si.edu/ids/deliveryService/?max_w=100&id=' . $thumbnail_link_literal;
+          // set the link
+          $full_image_link_literal = $record['content']['descriptiveNonRepeating']['online_media']['media'][0]['content'];
+          $full_image_link = (substr($thumbnail_link_literal, 0, 4) == 'http') ? $full_image_link_literal : 'https://ids.si.edu/ids/deliveryService/?id=' . $full_image_link_literal;
+          // create the image tag
+          $image = '<a href="' . $full_image_link . '" target="_blank" style="display: flex;max-width: 25%;margin: auto;"><img src="' . $thumbnail_link . '"></a>';
+        }
+        $form['structured_search_results_tab']['structured_search_results'][$key] = array(
+          '#type' => 'item',
+          '#markup' => '<pre>' .
+          ( !empty($image) ?
+            '<div style="float:left; max-width: 70%; padding-right: 5%;">' . $fields . '</div>' . $image
+            :
+            '<div style="float:left;">' . $fields . '</div>' ) .
+          '<a href="/edan/search-console/full-record/' . $record['id'] . '" target="_blank" style="float: left;clear: both;">View Full Record</a>
+        </pre>',
+        '#group' => 'structured_search_results_tab',
+        );
     }
   }else{
     drupal_set_message('Your search returned no results. This may be due to a lack of matching records within EDAN or an invalid parameter. Please check that all of your parameters are set correctly.', 'warning');
@@ -502,18 +511,13 @@ if(isset($form_state['raw_json_results'])){
     }else {
       $lines = explode("\n", $form_state['raw_json_results']);
       $output = implode("\n", array_slice($lines, 0, 1000));
-      $link_to_fulltext = '<a href="/full_json/' . $form_state['query_reference'] . '"" target="_blank">Click to view full JSON</a>';
+      $link_to_fulltext = '<a href="/edan/search-console/full-json' . $form_state['query_reference'] . '"" target="_blank">Click to view full JSON</a>';
     }
 
     $copy_js = 'jQuery().ready(function(){
 
       jQuery("#edit-copy-to-clipboard").click( function (e) {
         e.preventDefault();
-        /*var temp = jQuery("<input>");
-        jQuery("body").append(temp);
-        temp.val(jQuery("#holdtext").text()).select();
-        document.execCommand("copy");
-        temp.remove();*/
         jQuery("#holdtext").select();
         document.execCommand("copy");
       });
@@ -613,7 +617,7 @@ function edan_search_console_form_submit($form, &$form_state) {
     $form_state['query_reference'] = $query;
 
     // set query on the query tab
-    $form_state['input']['query']['value'] = $query;
+    $form_state['input']['query'] = $query;
     $form_state['encoded_query'] = urlencode($query);
     $form_state['input']['collections_rows'] = $query_parameters['rows'];
     break;
@@ -703,7 +707,7 @@ function edan_search_console_form_submit($form, &$form_state) {
       $form_state['query_reference'] = $query;
 
       // set query on the query tab
-      $form_state['input']['query']['value'] = $query;
+      $form_state['input']['query'] = $query;
       $form_state['encoded_query'] = urlencode($query);
       $form_state['input']['record_type'] = 'edanmdm';
     }
@@ -712,8 +716,8 @@ function edan_search_console_form_submit($form, &$form_state) {
 
     // this is the simple query form
     case 'query_submit':
-    if(!empty($form_state['values']['query']['value'])){
-      $query = str_replace(' ', '+', $form_state['values']['query']['value']);
+    if(!empty($form_state['values']['query'])){
+      $query = str_replace(' ', '+', $form_state['values']['query']);
         // set the encoded query for reference
       $form_state['encoded_query'] = urlencode($query);
     }
