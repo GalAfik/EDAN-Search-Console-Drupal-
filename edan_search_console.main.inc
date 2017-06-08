@@ -139,45 +139,78 @@ function _edan_search_console_build_filters_tab($form, &$form_state) {
     );
 
   // get list of facet names based on type
-  $facets = array();
-  foreach ($object_types as $key => $value) {
-    $facets[ $key ] = _edan_search_console_get_facets_from_edan( $key );
-  }
+  // $facets = array();
+  // foreach ($object_types as $key => $value) {
+  //   $facets[ $key ] = _edan_search_console_get_facets_from_edan( $key );
+  // }
 
   // logic for building out facet fields
-  if(empty($form_state['facet_num_items']) && empty($record)) {
+  if(empty($form_state['facet_num_items']) && empty($form_state['default_facets'])) {
     $form_state['facet_num_items'] = 0;
   }
   $form_state['facet_num_items'] = !empty($form_state['facet_num_items']) ? $form_state['facet_num_items'] : 0;
+  $form_state['facet_num_items'] = !empty($form_state['default_facets']) ? count($form_state['default_facets']) : 0;
 
 
   // handling for autocomplete tooltip on facet input fields
   drupal_add_library('system', 'ui.autocomplete');
   $object_type = isset($form_state['values']['record_type']) ? $form_state['values']['record_type'] : '';
   // build out all of the facet forms
-  for ($i = 1; $i <= $form_state['facet_num_items']; $i++) {
-    $form['search_field_filters_tab']['facets']['facet_name_' . $i] = array(
-      '#type' => 'select',
-      '#title' => t('Facet #' . $i),
-      '#options' => _edan_search_console_get_facet_names($object_type),
-      // '#ajax' => array(
-      //   'wrapper' => 'facet-wrapper',
-      //   'callback' => 'search_console_ajax_callback',
-      //   ),
-      );
-    $form['search_field_filters_tab']['facets']['facet_value_' . $i] = array(
-      '#type' => 'textfield',
-      '#group' => 'search_field_filters_tab',
-      );
+  if (!empty($form_state['default_facets'])) {
+    // manually set up a counter
+    $i = 1;
+    // set the record type if it exists and remove it from the array
+    if (array_key_exists('type', $form_state['default_facets'])) {
+      $form_state['input']['record_type'] = $form_state['default_facets']['type'];
+      unset($form_state['default_facets']['type']);
+    }
+    // build out the facets
+    foreach ($form_state['default_facets'] as $key => $value) {
+      $options = _edan_search_console_get_facet_names($object_type);
+      // only add the facet if it exists for the record type
+      if (array_key_exists($key, $options)) {
+        $form['search_field_filters_tab']['facets']['facet_name_' . $i] = array(
+          '#type' => 'select',
+          '#title' => t('Facet #' . $i),
+          '#options' => $options,
+          '#default_value' => $key,
+          );
+        $form['search_field_filters_tab']['facets']['facet_value_' . $i] = array(
+          '#type' => 'textfield',
+          '#default_value' => $value,
+          '#group' => 'search_field_filters_tab',
+          );
 
-    $form_state['facet_name'] = isset($form_state['values']['facet_name_' . $i]) ? $form_state['values']['facet_name_' . $i] : '';
+        // advance counter to match loop
+        $i++;
+      }
+    }
 
-    // following this, autocomplete_options contains an array of facet names that each contains an array of possible facet values for that field
-    $autocomplete_options = array();
-    $results = json_decode(_edan_search_console_get_facets_from_edan(), TRUE);
-    foreach ($results['facets'] as $facet_name => $facet_values) {
-      foreach ($facet_values as $facet_value) {
-        $autocomplete_options[ $facet_name ][] = $facet_value[0];
+  } else {
+    for ($i = 1; $i <= $form_state['facet_num_items']; $i++) {
+      $form['search_field_filters_tab']['facets']['facet_name_' . $i] = array(
+        '#type' => 'select',
+        '#title' => t('Facet #' . $i),
+        '#options' => _edan_search_console_get_facet_names($object_type),
+        // '#ajax' => array(
+        //   'wrapper' => 'facet-wrapper',
+        //   'callback' => 'search_console_ajax_callback',
+        //   ),
+        );
+      $form['search_field_filters_tab']['facets']['facet_value_' . $i] = array(
+        '#type' => 'textfield',
+        '#group' => 'search_field_filters_tab',
+        );
+
+      $form_state['facet_name'] = isset($form_state['values']['facet_name_' . $i]) ? $form_state['values']['facet_name_' . $i] : '';
+
+      // following this, autocomplete_options contains an array of facet names that each contains an array of possible facet values for that field
+      $autocomplete_options = array();
+      $results = json_decode(_edan_search_console_get_facets_from_edan(), TRUE);
+      foreach ($results['facets'] as $facet_name => $facet_values) {
+        foreach ($facet_values as $facet_value) {
+          $autocomplete_options[ $facet_name ][] = $facet_value[0];
+        }
       }
     }
 
@@ -494,6 +527,7 @@ function edan_search_console_form_submit($form, &$form_state) {
 
     // set form reference for the final query
     $form_state['query_reference'] = $query;
+    $form_state['default_facets'] = array();
 
     // set query on the query tab
     $form_state['input']['query'] = $query;
@@ -545,6 +579,7 @@ function edan_search_console_form_submit($form, &$form_state) {
 
       // build out the final query
       $query = 'fqs=[';
+      $form_state['default_facets'] = array();
       // add all fq parameters as fqs to the final query first
       $last_element_in_array = count($query_parameters['fqs']) - 1;
       foreach ($query_parameters['fqs'] as $key => $fq) {
@@ -557,7 +592,7 @@ function edan_search_console_form_submit($form, &$form_state) {
         // set the filters on the filters tab
         $fq_key = reset(explode(':', $fq));
         $fq_value = end(explode(':', $fq));
-
+        $form_state['default_facets'][$fq_key] = $fq_value;
       }
       $query .= ']';
       // unset fqs from the parameters to make sure it's not reapplied
@@ -593,6 +628,7 @@ function edan_search_console_form_submit($form, &$form_state) {
 
     // this is the simple query form
     case 'query_submit':
+
     if(!empty($form_state['values']['query'])){
       $query = str_replace(' ', '+', $form_state['values']['query']);
       // set the encoded query for reference
@@ -635,11 +671,13 @@ function edan_search_console_form_submit($form, &$form_state) {
         break;
       }
     }
+
+    $form_state['default_facets'] = array();
     foreach ($query_parameters['fqs'] as $key => $fq) {
       // set the filters on the filters tab
       $fq_key = reset(explode(':', $fq));
       $fq_value = end(explode(':', $fq));
-
+      $form_state['default_facets'][$fq_key] = $fq_value;
     }
     break;
   }
