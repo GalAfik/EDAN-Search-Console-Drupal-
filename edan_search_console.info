@@ -1,4 +1,5 @@
 name = EDAN Search Console
+description = Provides a search tool for querying EDAN.
 core = 7.x
-package = EDAN
-configure = admin/config/search/edan-search-console
+package = edan
+configure = admin/content/edan-search-console
