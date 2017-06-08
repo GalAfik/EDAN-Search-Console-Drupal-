@@ -1,4 +1,4 @@
-# EDAN-Search-Console-Drupal-
+# edan-search-console
 
 The Search Console provides multiple ways to query EDAN and view results. It can be used as a developement tool or playground to learn how EDAN functions.
  
