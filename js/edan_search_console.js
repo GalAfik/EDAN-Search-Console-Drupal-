@@ -32,7 +32,7 @@ jQuery(document).ready(function() {
     function() {
       jQuery(this).css("background", "#008cba")
     }
-    );
+  );
 
   jQuery("#edit-clear, #edit-clear--2, #edit-clear--3").click( function (e) {
     e.preventDefault();
@@ -42,7 +42,7 @@ jQuery(document).ready(function() {
   // hide parts of description box
   jQuery(".filter-wrapper").hide();
 
-  //  handles copying to clipboard
+  // handles copying to clipboard
   jQuery("#edit-copy-to-clipboard").click( function (e) {
     e.preventDefault();
     jQuery("#holdtext").select();
@@ -51,12 +51,11 @@ jQuery(document).ready(function() {
   });
 
   jQuery('#edan-search-console-form').keypress( function( e ) {
-  var code = e.keyCode || e.which;
-
-  if( code === 13 ) {
-    e.preventDefault();
-    return false;
-  }
-})
+    var code = e.keyCode || e.which;
+    if( code === 13 ) {
+      e.preventDefault();
+      return false;
+    }
+  })
 
 });

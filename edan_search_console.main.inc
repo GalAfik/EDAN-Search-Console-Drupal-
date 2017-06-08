@@ -461,234 +461,234 @@ function edan_search_console_form_submit($form, &$form_state) {
           !empty($form_state['values']['facet_value_' . $facet_number])) {
           // add this name:value pair to the fqs
           $query_parameters['fqs'][] = $form_state['values']['facet_name_' . $facet_number] . ':' . $form_state['values']['facet_value_' . $facet_number];
+        }
       }
     }
-  }
 
     // build out the final query
-  $query = 'fqs=[';
+    $query = 'fqs=[';
     // add all fq parameters as fqs to the final query first
-  $last_element_in_array = count($query_parameters['fqs']) - 1;
-  foreach ($query_parameters['fqs'] as $key => $fq) {
-    $query .= '"' . str_replace(',', '+', $fq) . '"';
+    $last_element_in_array = count($query_parameters['fqs']) - 1;
+    foreach ($query_parameters['fqs'] as $key => $fq) {
+      $query .= '"' . str_replace(',', '+', $fq) . '"';
       // add comma if this is not the last element
-    if ($key != $last_element_in_array) {
-      $query .= ',';
+      if ($key != $last_element_in_array) {
+        $query .= ',';
+      }
     }
-  }
-  $query .= ']';
+    $query .= ']';
     // unset fqs from the parameters to make sure it's not reapplied
-  unset($query_parameters['fqs']);
-  foreach ($query_parameters as $key => $value) {
+    unset($query_parameters['fqs']);
+    foreach ($query_parameters as $key => $value) {
       // only add the ampersand if the query is not empty
-    if (!empty($query)) {
-      $query .= '&';
-    }
+      if (!empty($query)) {
+        $query .= '&';
+      }
       // add value to the query
-    $query .= $key . '=' . str_replace(',', '+', $value);
-  }
+      $query .= $key . '=' . str_replace(',', '+', $value);
+    }
 
     // get rid of unnecessary spaces in the query
-  $query = str_replace(' ', '+', $query);
-  $query = preg_replace('/[++]+/', '+', $query);
+    $query = str_replace(' ', '+', $query);
+    $query = preg_replace('/[++]+/', '+', $query);
 
     // set form reference for the final query
-  $form_state['query_reference'] = $query;
+    $form_state['query_reference'] = $query;
 
     // set query on the query tab
-  $form_state['input']['query'] = $query;
-  $form_state['encoded_query'] = urlencode($query);
-  $form_state['input']['collections_rows'] = $query_parameters['rows'];
-  break;
+    $form_state['input']['query'] = $query;
+    $form_state['encoded_query'] = urlencode($query);
+    $form_state['input']['collections_rows'] = $query_parameters['rows'];
+    break;
 
 
     // this is the collections url form
-  case 'collections_url_submit':
-      // get the query from a collections.si.edu url
-  if(!empty($form_state['values']['collections_url'])){
+    case 'collections_url_submit':
+    // get the query from a collections.si.edu url
+    if(!empty($form_state['values']['collections_url'])){
 
       // reset the filters fields
+      $form_state['input']['q'] = '';
+      $form_state['input']['rows'] = 10;
+      $form_state['input']['start'] = 1;
+
+      // set query
+      $temp_query = end(explode('http://collections.si.edu/search/results.htm?', urldecode($form_state['values']['collections_url'])));
+      $temp_query_parameters = explode('&', $temp_query);
+      $query_parameters = array();
+      $query_parameters['fqs'] = array();
+      // set the key to the parameter name and the value to just the value
+      foreach ($temp_query_parameters as $temp_query_param) {
+        // the key in this case is the parameter
+        $key = reset(explode('=', $temp_query_param));
+        // the value is what the parameter is set to
+        $value = end(explode('=', $temp_query_param));
+        switch ($key) {
+          case 'fq':
+          $sanitized_value = str_replace('"', '', urldecode($value));
+          $query_parameters['fqs'][] = $sanitized_value;
+          break;
+          case 'q':
+          $query_parameters['q'] = $value;
+          // set the filters on the filters tab
+          $form_state['input']['q'] .= $value;
+          break;
+          default:
+          $query_parameters[$key] = $value;
+          // set the filters on the filters tab
+          if (isset($form_state['input'][$key])) {
+            $form_state['input'][$key] = $value;
+          }
+          break;
+        }
+      }
+
+      // build out the final query
+      $query = 'fqs=[';
+      // add all fq parameters as fqs to the final query first
+      $last_element_in_array = count($query_parameters['fqs']) - 1;
+      foreach ($query_parameters['fqs'] as $key => $fq) {
+        $query .= str_replace(',', '+', $fq);
+        // add comma if this is not the last element
+        if ($key != $last_element_in_array) {
+          $query .= ',';
+        }
+
+        // set the filters on the filters tab
+        $fq_key = reset(explode(':', $fq));
+        $fq_value = end(explode(':', $fq));
+
+      }
+      $query .= ']';
+      // unset fqs from the parameters to make sure it's not reapplied
+      unset($query_parameters['fqs']);
+      foreach ($query_parameters as $key => $value) {
+        // only add the ampersand if the query is not empty
+        if (!empty($query)) {
+          $query .= '&';
+        }
+        // add value to the query
+        $query .= $key . '=' . str_replace(',', '+', $value);
+      }
+      // add rows to the final query if necessary
+      if (!empty($form_state['input']['collections_rows'])) {
+        $query .= '&rows=' . $form_state['input']['collections_rows'];
+        $form_state['input']['rows'] = $form_state['input']['collections_rows'];
+      }
+
+      // get rid of unnecessary spaces in the query
+      $query = str_replace(' ', '+', $query);
+      $query = preg_replace('/[+]{2,}/', '+', $query);
+
+      // set form reference for the final query
+      $form_state['query_reference'] = $query;
+
+      // set query on the query tab
+      $form_state['input']['query'] = $query;
+      $form_state['encoded_query'] = urlencode($query);
+      $form_state['input']['record_type'] = 'edanmdm';
+    }
+    break;
+
+
+    // this is the simple query form
+    case 'query_submit':
+    if(!empty($form_state['values']['query'])){
+      $query = str_replace(' ', '+', $form_state['values']['query']);
+      // set the encoded query for reference
+      $form_state['encoded_query'] = urlencode($query);
+    }
+    $form_state['query_reference'] = $query;
+
+
+    // reset the filters fields
     $form_state['input']['q'] = '';
     $form_state['input']['rows'] = 10;
     $form_state['input']['start'] = 1;
-
-      // set query
-    $temp_query = end(explode('http://collections.si.edu/search/results.htm?', urldecode($form_state['values']['collections_url'])));
-    $temp_query_parameters = explode('&', $temp_query);
-    $query_parameters = array();
+    $form_state['input']['collections_url'] = '';
+    // fill in the other tabs using the query as reference
+    $temp_query_parameters = explode('&', $query);
     $query_parameters['fqs'] = array();
-      // set the key to the parameter name and the value to just the value
     foreach ($temp_query_parameters as $temp_query_param) {
-        // the key in this case is the parameter
+      // the key in this case is the parameter
       $key = reset(explode('=', $temp_query_param));
-        // the value is what the parameter is set to
+      // the value is what the parameter is set to
       $value = end(explode('=', $temp_query_param));
       switch ($key) {
-        case 'fq':
-        $sanitized_value = str_replace('"', '', urldecode($value));
-        $query_parameters['fqs'][] = $sanitized_value;
+        case 'fqs':
+        $fqs_array = explode(',', str_replace('"', '', substr($value, 1, -1)));
+        foreach ($fqs_array as $fq) {
+          $query_parameters['fqs'][] = $fq;
+        }
         break;
         case 'q':
-        $query_parameters['q'] = $value;
-            // set the filters on the filters tab
         $form_state['input']['q'] .= $value;
         break;
+        case 'rows':
+        $form_state['input']['rows'] = $value;
+        $form_state['input']['collections_rows'] = $value;
+        break;
         default:
-        $query_parameters[$key] = $value;
-            // set the filters on the filters tab
         if (isset($form_state['input'][$key])) {
           $form_state['input'][$key] = $value;
         }
         break;
       }
     }
-
-      // build out the final query
-    $query = 'fqs=[';
-      // add all fq parameters as fqs to the final query first
-    $last_element_in_array = count($query_parameters['fqs']) - 1;
     foreach ($query_parameters['fqs'] as $key => $fq) {
-      $query .= str_replace(',', '+', $fq);
-        // add comma if this is not the last element
-      if ($key != $last_element_in_array) {
-        $query .= ',';
-      }
-
-        // set the filters on the filters tab
+      // set the filters on the filters tab
       $fq_key = reset(explode(':', $fq));
       $fq_value = end(explode(':', $fq));
 
     }
-    $query .= ']';
-      // unset fqs from the parameters to make sure it's not reapplied
-    unset($query_parameters['fqs']);
-    foreach ($query_parameters as $key => $value) {
-        // only add the ampersand if the query is not empty
-      if (!empty($query)) {
-        $query .= '&';
-      }
-        // add value to the query
-      $query .= $key . '=' . str_replace(',', '+', $value);
-    }
-      // add rows to the final query if necessary
-    if (!empty($form_state['input']['collections_rows'])) {
-      $query .= '&rows=' . $form_state['input']['collections_rows'];
-      $form_state['input']['rows'] = $form_state['input']['collections_rows'];
-    }
-
-      // get rid of unnecessary spaces in the query
-    $query = str_replace(' ', '+', $query);
-    $query = preg_replace('/[+]{2,}/', '+', $query);
-
-      // set form reference for the final query
-    $form_state['query_reference'] = $query;
-
-      // set query on the query tab
-    $form_state['input']['query'] = $query;
-    $form_state['encoded_query'] = urlencode($query);
-    $form_state['input']['record_type'] = 'edanmdm';
+    break;
   }
-  break;
-
-
-    // this is the simple query form
-  case 'query_submit':
-  if(!empty($form_state['values']['query'])){
-    $query = str_replace(' ', '+', $form_state['values']['query']);
-        // set the encoded query for reference
-    $form_state['encoded_query'] = urlencode($query);
-  }
-  $form_state['query_reference'] = $query;
-
-
-    // reset the filters fields
-  $form_state['input']['q'] = '';
-  $form_state['input']['rows'] = 10;
-  $form_state['input']['start'] = 1;
-  $form_state['input']['collections_url'] = '';
-    // fill in the other tabs using the query as reference
-  $temp_query_parameters = explode('&', $query);
-  $query_parameters['fqs'] = array();
-  foreach ($temp_query_parameters as $temp_query_param) {
-      // the key in this case is the parameter
-    $key = reset(explode('=', $temp_query_param));
-      // the value is what the parameter is set to
-    $value = end(explode('=', $temp_query_param));
-    switch ($key) {
-      case 'fqs':
-      $fqs_array = explode(',', str_replace('"', '', substr($value, 1, -1)));
-      foreach ($fqs_array as $fq) {
-        $query_parameters['fqs'][] = $fq;
-      }
-      break;
-      case 'q':
-      $form_state['input']['q'] .= $value;
-      break;
-      case 'rows':
-      $form_state['input']['rows'] = $value;
-      $form_state['input']['collections_rows'] = $value;
-      break;
-      default:
-      if (isset($form_state['input'][$key])) {
-        $form_state['input'][$key] = $value;
-      }
-      break;
-    }
-  }
-  foreach ($query_parameters['fqs'] as $key => $fq) {
-      // set the filters on the filters tab
-    $fq_key = reset(explode(':', $fq));
-    $fq_value = end(explode(':', $fq));
-
-  }
-  break;
-}
 
   // this block submits the query to EDAN and cleans up/prints out the results for the user
-if(!empty($query)){
+  if(!empty($query)){
 
     // error handling section
-  $query_parameters = array();
-  $parameter_array = explode('&', $query);
-  foreach ($parameter_array as $value) {
-   list($k, $v) = explode('=', $value);
-   $query_parameters[$k] = $v;
- }
+    $query_parameters = array();
+    $parameter_array = explode('&', $query);
+    foreach ($parameter_array as $value) {
+      list($k, $v) = explode('=', $value);
+      $query_parameters[$k] = $v;
+    }
     // q is empty
- if (!isset($query_parameters['q']) || empty($query_parameters['q'])) {
-  drupal_set_message('You have not entered a "q" value! Your EDAN search will return a list of generic records.', 'warning');
-}
+    if (!isset($query_parameters['q']) || empty($query_parameters['q'])) {
+      drupal_set_message('You have not entered a "q" value! Your EDAN search will return a list of generic records.', 'warning');
+    }
     // rows is invalid
-if (!isset($query_parameters['rows']) || !is_numeric($query_parameters['rows']) || $query_parameters['rows'] <= 0) {
-  drupal_set_message('The "rows" value you have entered seems to be invalid (' . (isset($query_parameters['rows']) ? $query_parameters['rows'] : 'EMPTY VALUE') . '). Make sure that "rows" is a positive integer between 1 and 100.', 'warning');
-}
+    if (!isset($query_parameters['rows']) || !is_numeric($query_parameters['rows']) || $query_parameters['rows'] <= 0) {
+      drupal_set_message('The "rows" value you have entered seems to be invalid (' . (isset($query_parameters['rows']) ? $query_parameters['rows'] : 'EMPTY VALUE') . '). Make sure that "rows" is a positive integer between 1 and 100.', 'warning');
+    }
     // start is invalid
-if (!isset($query_parameters['start']) || !is_numeric($query_parameters['start']) || $query_parameters['start'] < 0) {
-  drupal_set_message('The "start" value you have entered seems to be invalid (' . (isset($query_parameters['start']) ? $query_parameters['start'] : 'EMPTY VALUE') . '). Make sure that "start" is a positive integer above 0.', 'warning');
-}
+    if (!isset($query_parameters['start']) || !is_numeric($query_parameters['start']) || $query_parameters['start'] < 0) {
+      drupal_set_message('The "start" value you have entered seems to be invalid (' . (isset($query_parameters['start']) ? $query_parameters['start'] : 'EMPTY VALUE') . '). Make sure that "start" is a positive integer above 0.', 'warning');
+    }
 
     // set the raw json results
-$raw_json_results = _edan_search_console_get_search_results_from_edan(isset($query) ? $query : '');
-$form_state['raw_json_results'] = $raw_json_results;
+    $raw_json_results = _edan_search_console_get_search_results_from_edan(isset($query) ? $query : '');
+    $form_state['raw_json_results'] = $raw_json_results;
 
     // set the structured search results
-$raw_json = json_decode($raw_json_results, true);
-if(isset($raw_json['rows'])){
-  $form_state['rows_reference'] = $raw_json['numFound'];
-  $form_state['rows_returned_reference'] = count($raw_json['rows']);
+    $raw_json = json_decode($raw_json_results, true);
+    if(isset($raw_json['rows'])){
+      $form_state['rows_reference'] = $raw_json['numFound'];
+      $form_state['rows_returned_reference'] = count($raw_json['rows']);
       // reset the results
-  $form_state['structured_search_results'] = array();
+      $form_state['structured_search_results'] = array();
       // add rows to results
-  foreach ($raw_json['rows'] as $key => $record) {
-    $form_state['structured_search_results'][] = $record;
+      foreach ($raw_json['rows'] as $key => $record) {
+        $form_state['structured_search_results'][] = $record;
+      }
+    }else{
+      drupal_set_message('Something went wrong. Please contact an Administrator for help.', 'error');
+    }
+  }else{
+    drupal_set_message('The query you entered seems to be empty. Please adjust your search and try again or contact an Administrator for help.', 'error');
   }
-}else{
-  drupal_set_message('Something went wrong. Please contact an Administrator.', 'error');
-}
-}else{
-  drupal_set_message('The search parameters are invalid. Please adjust your search and try again or contact an Administrator.', 'error');
-}
 
   // rebuild the form with new inputs and results set
-$form_state['rebuild'] = TRUE;
+  $form_state['rebuild'] = TRUE;
 }
