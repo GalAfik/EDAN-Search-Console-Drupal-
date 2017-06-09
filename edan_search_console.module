@@ -313,6 +313,7 @@ function edan_search_console_form($form, &$form_state){
   '#markup' => '<pre>' . (isset($form_state['encoded_query']) ? $form_state['encoded_query'] : '') . '</pre>',
   '#description' => 'This is a URL-safe encoded query to use in your application.',
   '#group' => 'query_tab',
+  '#attributes' => array('style' => 'width: 430px;'),
   );
   // submit button
  $form['query_tab']['button_container'] = array(
@@ -415,6 +416,9 @@ jQuery(document).ready(function() {
     e.preventDefault();
     clear_form_elements(jQuery("#edan-search-console-form"));
   });
+
+  // fix issue with pre element breaking out of the fieldset
+  jQuery("#edit-encoded-query").css("width", "430px");
 });
 ';
 drupal_add_js($clear_button_js, 'inline');
@@ -770,7 +774,7 @@ function edan_search_console_form_submit($form, &$form_state) {
   }
 
   // this block submits the query to EDAN and cleans up/prints out the results for the user
-  if(!empty($query)){
+  if(!empty($query) && strpos($query, '=') !== false){
 
     // error handling section
     $query_parameters = array();
