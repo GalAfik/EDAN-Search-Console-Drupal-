@@ -20,11 +20,13 @@ function _edan_search_console_build_query_tab($form, &$form_state) {
     '#markup' => '<pre>' . (isset($form_state['encoded_query']) ? $form_state['encoded_query'] : '') . '</pre>',
     '#description' => 'This is a URL-safe encoded query to use in your application.',
     '#group' => 'query_tab',
+    '#attributes' => array('style' => 'width: 430px;'),
     );
   // submit button
   $form['query_tab']['button_container'] = array(
     '#type' => 'item',
     '#attributes' => array('class' => array('container-inline')),
+    '#group' => 'query_tab',
     );
   $form['query_tab']['button_container']['submit'] = array(
     '#value' => 'Submit',
@@ -67,6 +69,7 @@ function _edan_search_console_build_collections_tab($form, &$form_state) {
   $form['collections_url_tab']['button_container'] = array(
     '#type' => 'item',
     '#attributes' => array('class' => array('container-inline')),
+    '#group' => 'collections_url_tab',
     );
   $form['collections_url_tab']['button_container']['submit'] = array(
     '#value' => 'Submit',
@@ -149,44 +152,44 @@ function _edan_search_console_build_filters_tab($form, &$form_state) {
     $form_state['facet_num_items'] = 0;
   }
   $form_state['facet_num_items'] = !empty($form_state['facet_num_items']) ? $form_state['facet_num_items'] : 0;
-  $form_state['facet_num_items'] = !empty($form_state['default_facets']) ? count($form_state['default_facets']) : 0;
+  // $form_state['facet_num_items'] = !empty($form_state['default_facets']) ? count($form_state['default_facets']) : 0;
 
 
   // handling for autocomplete tooltip on facet input fields
   drupal_add_library('system', 'ui.autocomplete');
   $object_type = isset($form_state['values']['record_type']) ? $form_state['values']['record_type'] : '';
   // build out all of the facet forms
-  if (!empty($form_state['default_facets'])) {
-    // manually set up a counter
-    $i = 1;
-    // set the record type if it exists and remove it from the array
-    if (array_key_exists('type', $form_state['default_facets'])) {
-      $form_state['input']['record_type'] = $form_state['default_facets']['type'];
-      unset($form_state['default_facets']['type']);
-    }
-    // build out the facets
-    foreach ($form_state['default_facets'] as $key => $value) {
-      $options = _edan_search_console_get_facet_names($object_type);
-      // only add the facet if it exists for the record type
-      if (array_key_exists($key, $options)) {
-        $form['search_field_filters_tab']['facets']['facet_name_' . $i] = array(
-          '#type' => 'select',
-          '#title' => t('Facet #' . $i),
-          '#options' => $options,
-          '#default_value' => $key,
-          );
-        $form['search_field_filters_tab']['facets']['facet_value_' . $i] = array(
-          '#type' => 'textfield',
-          '#default_value' => $value,
-          '#group' => 'search_field_filters_tab',
-          );
+  // if (!empty($form_state['default_facets'])) {
+  //   // manually set up a counter
+  //   $i = 1;
+  //   // set the record type if it exists and remove it from the array
+  //   if (array_key_exists('type', $form_state['default_facets'])) {
+  //     $form_state['input']['record_type'] = $form_state['default_facets']['type'];
+  //     unset($form_state['default_facets']['type']);
+  //   }
+  //   // build out the facets
+  //   foreach ($form_state['default_facets'] as $key => $value) {
+  //     $options = _edan_search_console_get_facet_names($object_type);
+  //     // only add the facet if it exists for the record type
+  //     if (array_key_exists($key, $options)) {
+  //       $form['search_field_filters_tab']['facets']['facet_name_' . $i] = array(
+  //         '#type' => 'select',
+  //         '#title' => t('Facet #' . $i),
+  //         '#options' => $options,
+  //         '#default_value' => $key,
+  //         );
+  //       $form['search_field_filters_tab']['facets']['facet_value_' . $i] = array(
+  //         '#type' => 'textfield',
+  //         '#default_value' => $value,
+  //         '#group' => 'search_field_filters_tab',
+  //         );
 
-        // advance counter to match loop
-        $i++;
-      }
-    }
+  //       // advance counter to match loop
+  //       $i++;
+  //     }
+  //   }
 
-  } else {
+  // } else {
     for ($i = 1; $i <= $form_state['facet_num_items']; $i++) {
       $form['search_field_filters_tab']['facets']['facet_name_' . $i] = array(
         '#type' => 'select',
@@ -229,7 +232,7 @@ function _edan_search_console_build_filters_tab($form, &$form_state) {
     //   });';
     //   drupal_add_js($autocomplete_js, 'inline');
     // }
-  }
+  // }
 
   $form['search_field_filters_tab']['facets']['add_facet_item'] = array(
     '#name' => 'add_facet_item',
@@ -683,7 +686,7 @@ function edan_search_console_form_submit($form, &$form_state) {
   }
 
   // this block submits the query to EDAN and cleans up/prints out the results for the user
-  if(!empty($query)){
+  if(!empty($query) && strpos($query, '=') !== false){
 
     // error handling section
     $query_parameters = array();
@@ -724,7 +727,7 @@ function edan_search_console_form_submit($form, &$form_state) {
       drupal_set_message('Something went wrong. Please contact an Administrator for help.', 'error');
     }
   }else{
-    drupal_set_message('The query you entered seems to be empty. Please adjust your search and try again or contact an Administrator for help.', 'error');
+    drupal_set_message('The query you entered seems to be empty or invalid. Please adjust your search and try again or contact an Administrator for help.', 'error');
   }
 
   // rebuild the form with new inputs and results set

@@ -58,4 +58,7 @@ jQuery(document).ready(function() {
     }
   })
 
+  // fix issue with pre element breaking out of the fieldset
+  jQuery('#edit-encoded-query').css('width', '430px');
+
 });
