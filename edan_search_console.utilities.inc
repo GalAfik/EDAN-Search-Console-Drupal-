@@ -78,12 +78,12 @@ function _edan_search_console_get_facet_names( $object_type ) {
       'online_media_type' => 'Online Media Type',
       'object_type' => 'Object Type',
       'topic' => 'Topic',
-      'p.edanmdm.indexedstructured.name' => 'Name',
+      // 'p.edanmdm.indexedstructured.name' => 'Name',
       'culture' => 'Culture',
       'language' => 'Language',
       'place' => 'Place',
       'date' => 'Date',
-      'p.edanmdm.descriptivenonrepeating.data_source' => 'Data Source',
+      // 'p.edanmdm.descriptivenonrepeating.data_source' => 'Data Source',
       );
     break;
 

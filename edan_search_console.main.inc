@@ -128,7 +128,11 @@ function _edan_search_console_build_filters_tab($form, &$form_state) {
     '#group' => 'search_field_filters_tab',
     '#ajax' => array(
       'wrapper' => 'facet-wrapper',
-      'callback' => 'search_console_ajax_callback',
+      'callback' => 'edan_search_console_facet_ajax_callback',
+      'progress' => array(
+          'type' => 'throbber',
+          'message' => 'Updating facets...',
+        ),
       ),
     );
 
@@ -190,48 +194,65 @@ function _edan_search_console_build_filters_tab($form, &$form_state) {
   //   }
 
   // } else {
-    for ($i = 1; $i <= $form_state['facet_num_items']; $i++) {
-      $form['search_field_filters_tab']['facets']['facet_name_' . $i] = array(
-        '#type' => 'select',
-        '#title' => t('Facet #' . $i),
-        '#options' => _edan_search_console_get_facet_names($object_type),
-        // '#ajax' => array(
-        //   'wrapper' => 'facet-wrapper',
-        //   'callback' => 'search_console_ajax_callback',
-        //   ),
-        );
-      $form['search_field_filters_tab']['facets']['facet_value_' . $i] = array(
-        '#type' => 'textfield',
-        '#group' => 'search_field_filters_tab',
-        );
+  $options = _edan_search_console_get_facet_names($object_type);
+  for ($i = 1; $i <= $form_state['facet_num_items']; $i++) {
+    $selected_facet = '';
+    $form['search_field_filters_tab']['facets']['facet_name_' . $i] = array(
+      '#type' => 'select',
+      '#title' => t('Facet #' . $i),
+      '#options' => !empty($options) ? $options : array('' => 'None Available'),
+      '#disabled' => !empty($options) ? FALSE : TRUE,
+      '#ajax' => array(
+        'wrapper' => 'facet-wrapper',
+        'callback' => 'edan_search_console_facet_ajax_callback',
+        'progress' => array(
+          'type' => 'throbber',
+          'message' => 'Updating facet options...',
+        ),
+        ),
+      );
 
-      $form_state['facet_name'] = isset($form_state['values']['facet_name_' . $i]) ? $form_state['values']['facet_name_' . $i] : '';
+    // add tooltip script for each field that has existing facets
+    // $selected_facet = isset($form_state['values']['facet_name_' . $i]) ? $form_state['values']['facet_name_' . $i] : reset($options);
+    $form['search_field_filters_tab']['facets']['facet_value_' . $i] = array(
+      '#type' => 'textfield',
+      '#disabled' => !empty($options) ? FALSE : TRUE,
+      '#group' => 'search_field_filters_tab',
+      '#prefix' => '<div id="facet-value-wrapper">',
+      '#suffix' => '</div>',
+      );
 
-      // following this, autocomplete_options contains an array of facet names that each contains an array of possible facet values for that field
-      $autocomplete_options = array();
-      $results = json_decode(_edan_search_console_get_facets_from_edan(), TRUE);
-      foreach ($results['facets'] as $facet_name => $facet_values) {
-        foreach ($facet_values as $facet_value) {
-          $autocomplete_options[ $facet_name ][] = $facet_value[0];
-        }
-      }
-    }
 
-    // // add tooltip script for each field that has existing facets
-    // if (array_key_exists($facet_name, $autocomplete_options)) {
-    //   $autocomplete_js = '
-    //   jQuery(document).ready(function() {
-    //     var tags =' . json_encode($autocomplete_options[$facet_name]) . ';
-    //     jQuery("[id^=edit-facet-value-' . $i . ']").autocomplete({
-    //       source: tags,
-    //       minLength: 0
-    //     });
-    //     jQuery("[id^=edit-facet-value-' . $i . ']").click(function() {
-    //       jQuery("[id^=edit-facet-value-' . $i . ']").autocomplete( "search", "" );
-    //     });
-    //   });';
-    //   drupal_add_js($autocomplete_js, 'inline');
+    // if (!empty($selected_facet)) {
+    //   // following this, autocomplete_options contains an array of facet names that each contains an array of possible facet values for that field
+    //   $autocomplete_options = array();
+    //   $results = json_decode(_edan_search_console_get_facets_from_edan(), TRUE);
+    //   foreach ($results['facets'] as $facet_name => $facet_values) {
+    //     foreach ($facet_values as $facet_value) {
+    //       $autocomplete_options[ $facet_name ][] = $facet_value[0];
+    //     }
+    //   }
+
+    //   if (array_key_exists($selected_facet, $autocomplete_options) || in_array($selected_facet, $options)) {
+    //     if (!array_key_exists($selected_facet, $autocomplete_options)) {
+    //       $selected_facet = array_search($selected_facet, $options);
+    //     }
+    //     $autocomplete_js = '
+    //     jQuery(document).ready(function() {
+    //       var tags = ' . json_encode($autocomplete_options[$selected_facet]) . ';
+    //       jQuery("[id^=edit-facet-value-' . $i . ']").autocomplete({
+    //         source: tags,
+    //         minLength: 0
+    //       });
+    //       jQuery("[id^=edit-facet-value-' . $i . ']").click(function() {
+    //         jQuery("[id^=edit-facet-value-' . $i . ']").autocomplete( "search", "" );
+    //       });
+    //     });';
+    //     drupal_add_js($autocomplete_js, 'inline');
+    //   }
     // }
+  }
+
   // }
 
   $form['search_field_filters_tab']['facets']['add_facet_item'] = array(
@@ -461,8 +482,40 @@ function _edan_search_console_facet_remove_item($form, &$form_state) {
   $form_state['rebuild'] = TRUE;
 }
 
-function edan_search_console_ajax_callback($form, $form_state) {
+function edan_search_console_facet_ajax_callback($form, $form_state) {
   return $form['search_field_filters_tab']['facets'];
+}
+
+function edan_search_console_facet_value_ajax_callback($form, $form_state) {
+  $i = str_replace('facet_name_', '', $form_state['triggering_element']['#name']);
+
+  // $autocomplete_options = array();
+  // $results = json_decode(_edan_search_console_get_facets_from_edan(), TRUE);
+  // foreach ($results['facets'] as $facet_name => $facet_values) {
+  //   foreach ($facet_values as $facet_value) {
+  //     $autocomplete_options[ $facet_name ][] = $facet_value[0];
+  //   }
+  // }
+
+  // $selected_facet = $form_state['triggering_element']['#value'];
+
+  // if (array_key_exists($selected_facet, $autocomplete_options)) {
+  //   $autocomplete_js = '
+  //     jQuery(document).ready(function() {
+  //       var tags = ' . json_encode($autocomplete_options[$selected_facet]) . ';
+  //       alert("test");
+  //       jQuery("#' . $form_state['triggering_element']['#id'] . '").autocomplete({
+  //         source: tags,
+  //         minLength: 0
+  //       });
+  //       jQuery("#' . $form_state['triggering_element']['#id'] . '").click(function() {
+  //         jQuery("#' . $form_state['triggering_element']['#id'] . '").autocomplete( "search", "" );
+  //       });
+  //     });';
+  //   drupal_add_js($autocomplete_js, 'inline');
+  // }
+
+  return $form['search_field_filters_tab']['facets']['facet_value_' . $i];
 }
 
 function edan_search_console_form_submit($form, &$form_state) {
