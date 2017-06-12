@@ -203,8 +203,8 @@ function _edan_search_console_build_filters_tab($form, &$form_state) {
       '#options' => !empty($options) ? $options : array('' => 'None Available'),
       '#disabled' => !empty($options) ? FALSE : TRUE,
       '#ajax' => array(
-        'wrapper' => 'facet-wrapper',
-        'callback' => 'edan_search_console_facet_ajax_callback',
+        'wrapper' => 'facet-value-wrapper',
+        'callback' => 'edan_search_console_facet_value_ajax_callback',
         'progress' => array(
           'type' => 'throbber',
           'message' => 'Updating facet options...',
@@ -222,6 +222,20 @@ function _edan_search_console_build_filters_tab($form, &$form_state) {
       '#suffix' => '</div>',
       );
 
+    $autocomplete_options = isset($form['search_field_filters_tab']['facets']['facet_value_' . $i]['autocomplete_options']) ? $form['search_field_filters_tab']['facets']['facet_value_' . $i]['autocomplete_options'] : '[]' ;
+    dumper($autocomplete_options,0);
+    $autocomplete_js = '
+    jQuery(document).ready(function() {
+      var tags = ' . $autocomplete_options . ';
+      jQuery("[id^=edit-facet-value-' . $i . ']").autocomplete({
+        source: tags,
+        minLength: 0
+      });
+      jQuery("[id^=edit-facet-value-' . $i . ']").click(function() {
+        jQuery("[id^=edit-facet-value-' . $i . ']").autocomplete( "search", "" );
+      });
+    });';
+    drupal_add_js($autocomplete_js, 'inline');
 
     // if (!empty($selected_facet)) {
     //   // following this, autocomplete_options contains an array of facet names that each contains an array of possible facet values for that field
@@ -232,7 +246,6 @@ function _edan_search_console_build_filters_tab($form, &$form_state) {
     //       $autocomplete_options[ $facet_name ][] = $facet_value[0];
     //     }
     //   }
-
     //   if (array_key_exists($selected_facet, $autocomplete_options) || in_array($selected_facet, $options)) {
     //     if (!array_key_exists($selected_facet, $autocomplete_options)) {
     //       $selected_facet = array_search($selected_facet, $options);
@@ -489,31 +502,30 @@ function edan_search_console_facet_ajax_callback($form, $form_state) {
 function edan_search_console_facet_value_ajax_callback($form, $form_state) {
   $i = str_replace('facet_name_', '', $form_state['triggering_element']['#name']);
 
-  // $autocomplete_options = array();
-  // $results = json_decode(_edan_search_console_get_facets_from_edan(), TRUE);
-  // foreach ($results['facets'] as $facet_name => $facet_values) {
-  //   foreach ($facet_values as $facet_value) {
-  //     $autocomplete_options[ $facet_name ][] = $facet_value[0];
-  //   }
-  // }
+  $autocomplete_options = array();
+  $results = json_decode(_edan_search_console_get_facets_from_edan(), TRUE);
+  foreach ($results['facets'] as $facet_name => $facet_values) {
+    foreach ($facet_values as $facet_value) {
+      $autocomplete_options[ $facet_name ][] = $facet_value[0];
+    }
+  }
+  $selected_facet = $form_state['triggering_element']['#value'];
 
-  // $selected_facet = $form_state['triggering_element']['#value'];
-
-  // if (array_key_exists($selected_facet, $autocomplete_options)) {
-  //   $autocomplete_js = '
-  //     jQuery(document).ready(function() {
-  //       var tags = ' . json_encode($autocomplete_options[$selected_facet]) . ';
-  //       alert("test");
-  //       jQuery("#' . $form_state['triggering_element']['#id'] . '").autocomplete({
-  //         source: tags,
-  //         minLength: 0
-  //       });
-  //       jQuery("#' . $form_state['triggering_element']['#id'] . '").click(function() {
-  //         jQuery("#' . $form_state['triggering_element']['#id'] . '").autocomplete( "search", "" );
-  //       });
-  //     });';
-  //   drupal_add_js($autocomplete_js, 'inline');
-  // }
+  if (array_key_exists($selected_facet, $autocomplete_options)) {
+    $form['search_field_filters_tab']['facets']['facet_value_' . $i]['autocomplete_options'] = json_encode($autocomplete_options[$selected_facet]);
+    // $autocomplete_js = '
+    //     var tags = ' . json_encode($autocomplete_options[$selected_facet]) . ';
+    //     alert("test");
+    //     jQuery("#' . $form_state['triggering_element']['#id'] . '").autocomplete({
+    //       source: tags,
+    //       minLength: 0
+    //     });
+    //     jQuery("#' . $form_state['triggering_element']['#id'] . '").click(function() {
+    //       jQuery("#' . $form_state['triggering_element']['#id'] . '").autocomplete( "search", "" );
+    //     });';
+    // drupal_add_js($autocomplete_js, 'inline');
+  }
+  dumper($form['search_field_filters_tab']['facets']['facet_value_' . $i]['autocomplete_options'], 0);
 
   return $form['search_field_filters_tab']['facets']['facet_value_' . $i];
 }
